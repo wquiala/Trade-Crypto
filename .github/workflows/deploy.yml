@@ -24,7 +24,7 @@ jobs:
             git pull origin main
             
             # Instalar nuevas dependencias si las hay
-            npm install
+            pnpm install
             
             # Compilar el código
             npm run build
