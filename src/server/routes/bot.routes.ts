@@ -374,6 +374,8 @@ function runBotLoop() {
             const currentPrice = klines[klines.length - 1].close;
             const entryPrice = position.entryPrice;
             const atr = botConfig.currentAtr[symbol] || (entryPrice * 0.015);
+            // Se necesita la info del símbolo aquí para formatear el precio de breakeven al enviar a BingX
+            const posInfo = getSymbolInfo(symbol);
 
             if (botConfig.useEarlyExit) {
               const shouldExitLong = position.positionSide === 'LONG' && liveAnalysis.signal === 'STRONG_SELL';
@@ -409,16 +411,50 @@ function runBotLoop() {
               if (position.positionSide === 'LONG') {
                 botConfig.highestPriceTracker[symbol] = Math.max(botConfig.highestPriceTracker[symbol] || entryPrice, currentPrice);
 
-                // ESCUDO PROTECTOR DINÁMICO (Opción B: Equilibrio)
+                // FIX Bug #3 (race condition): Toma parcial PRIMERO, antes del breakeven.
+                // Si ambas condiciones se cumplen en el mismo ciclo de 30s (highestTracker > 3x ATR
+                // implica también > 2.5x ATR), al ejecutar el parcial con await primero, el
+                // modifyStopLoss que viene después llama a getActivePositions() y obtiene
+                // el tamaño correcto (50% restante), no el 100% original.
+                if (!botConfig.partialTaken[symbol] && botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 3.0)) {
+                  botConfig.partialTaken[symbol] = true;
+                  const info = getSymbolInfo(symbol);
+                  const halfQtyStr = (position.amount / 2).toFixed(info.qtyPrecision);
+                  const halfQty = parseFloat(halfQtyStr);
+                  const notional = halfQty * currentPrice;
+
+                  if (notional >= info.minNotional) {
+                    console.log(`[AutoBot] 💰 Toma Parcial (50%) en ${symbol} LONG @ $${currentPrice}`);
+                    const closeRes = await bingxClient.closePosition(symbol, 'LONG', halfQty);
+                    if (closeRes.success) {
+                      telegramBot.sendMessage(`💰 <b>TOMA PARCIAL (50%)</b>\n\n• Par: ${escHtml(symbol)}\n• Se cerraron ${halfQty} LONG a +3x ATR.`);
+                      position.amount -= halfQty; // Ajustar volumen localmente para el resto de comprobaciones
+                    } else {
+                      console.error(`[AutoBot] ⚠️ Error en Toma Parcial LONG para ${symbol}:`, closeRes.message);
+                    }
+                  } else {
+                    console.log(`[AutoBot] ⚠️ Parcial ignorado en ${symbol} LONG: nocional $${notional.toFixed(2)} menor al mínimo $${info.minNotional}`);
+                  }
+                }
+
+                // ESCUDO PROTECTOR DINÁMICO (Breakeven a 2.5x ATR)
+                // Como el parcial ya se ejecutó arriba (await), modifyStopLoss consultará
+                // getActivePositions() con el tamaño correcto (50% si hubo parcial, 100% si no).
                 let stopLossFloor = -Infinity;
 
-                // FIX: retrasar breakeven a 2.5x ATR para darle espacio a la operación.
-                // Moverlo muy pronto (1.5x ATR) sacaba al bot en la primera corrección normal.
                 if (botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 2.5)) {
                   stopLossFloor = entryPrice + (atr * 0.2); // Breakeven con margen mínimo para cubrir comisiones
                   if (!botConfig.breakevenTriggered[symbol]) {
                     botConfig.breakevenTriggered[symbol] = true;
-                    telegramBot.sendMessage(`🛡 <b>BREAKEVEN ACTIVADO</b>\n\n• Par: ${escHtml(symbol)}\n• LONG protegida: SL movido a entrada (+0.4 ATR asegurados).`);
+                    const bePriceLong = parseFloat((entryPrice + (atr * 0.2)).toFixed(posInfo.pricePrecision));
+                    bingxClient.modifyStopLoss(symbol, 'LONG', bePriceLong)
+                      .then(res => {
+                        const beMsg = res.success
+                          ? `🛡 <b>BREAKEVEN ACTIVADO</b>\n\n• Par: ${escHtml(symbol)}\n• SL real movido a $${escHtml(String(bePriceLong))} en BingX. Posición protegida incluso sin conexión.`
+                          : `⚠️ <b>BREAKEVEN (software fallback)</b>\n\n• Par: ${escHtml(symbol)}\n• Error al mover SL en BingX: ${escHtml(res.message)}\n• El bot lo gestiona en software como respaldo.`;
+                        telegramBot.sendMessage(beMsg);
+                      })
+                      .catch(() => telegramBot.sendMessage(`⚠️ <b>BREAKEVEN (software fallback)</b>\n\n• Par: ${escHtml(symbol)}\n• No se pudo actualizar el SL en BingX. Gestionando localmente.`));
                   }
                 }
 
@@ -435,7 +471,7 @@ function runBotLoop() {
                   telegramBot.sendMessage(`🛡 <b>SALIDA PROTEGIDA</b>\n\n• Par: ${escHtml(symbol)}\n• LONG cerrada ${pnlStatus}.`);
                   botConfig.breakevenTriggered[symbol] = false;
                   botConfig.needsCleanup[symbol] = false;
-                  botConfig.lastSignals[symbol] = 'NONE'; // FIX: permite re-entrar si la misma señal vuelve
+                  botConfig.lastSignals[symbol] = 'NONE';
                   delete botConfig.tradeOpenTime[symbol];
                   delete botConfig.highestPriceTracker[symbol];
                   botConfig.partialTaken[symbol] = false;
@@ -445,29 +481,7 @@ function runBotLoop() {
                   continue;
                 }
 
-                // TOMA PARCIAL (SCALE-OUT) A +4x ATR (subido de 3.5x para no interferir con el TP del exchange en 5x ATR)
-                if (!botConfig.partialTaken[symbol] && botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 4.0)) {
-                  botConfig.partialTaken[symbol] = true;
-                  const info = getSymbolInfo(symbol);
-                  const halfQtyStr = (position.amount / 2).toFixed(info.qtyPrecision);
-                  const halfQty = parseFloat(halfQtyStr);
-                  const notional = halfQty * currentPrice;
-
-                  if (notional >= info.minNotional) {
-                    console.log(`[AutoBot] 💰 Toma Parcial (50%) en ${symbol} LONG @ $${currentPrice}`);
-                    const closeRes = await bingxClient.closePosition(symbol, 'LONG', halfQty);
-                    if (closeRes.success) {
-                      telegramBot.sendMessage(`💰 <b>TOMA PARCIAL (50%)</b>\n\n• Par: ${escHtml(symbol)}\n• Se cerraron ${halfQty} LONG a +4x ATR.`);
-                      position.amount -= halfQty; // Ajustar volumen localmente para el resto de comprobaciones
-                    } else {
-                      console.error(`[AutoBot] ⚠️ Error en Toma Parcial LONG para ${symbol}:`, closeRes.message);
-                    }
-                  } else {
-                    console.log(`[AutoBot] ⚠️ Parcial ignorado en ${symbol} LONG: nocional $${notional.toFixed(2)} menor al mínimo $${info.minNotional}`);
-                  }
-                }
-
-                // TRAILING STOP: retiene 75% de la ganancia máxima (inicia en 4.5x ATR, muy cerca del TP en 5x ATR)
+                // TRAILING STOP: retiene 75% de la ganancia máxima (inicia en 4.5x ATR, con TP del exchange ahora en 6x ATR)
                 if (botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 4.5)) {
                   const maxFavorableMovement = botConfig.highestPriceTracker[symbol] - entryPrice;
                   const triggerPrice = entryPrice + (maxFavorableMovement * 0.75);
@@ -484,7 +498,7 @@ function runBotLoop() {
                     telegramBot.sendMessage(`🛑 <b>TRAILING STOP — GANANCIA ASEGURADA</b>\n\n• Par: ${escHtml(symbol)}\n• Posición: LONG\n• Cierre en: $${escHtml(currentPrice)}`);
                     botConfig.breakevenTriggered[symbol] = false;
                     botConfig.needsCleanup[symbol] = false;
-                    botConfig.lastSignals[symbol] = 'NONE'; // FIX: permite re-entrar si la misma señal vuelve
+                    botConfig.lastSignals[symbol] = 'NONE';
                     delete botConfig.tradeOpenTime[symbol];
                     delete botConfig.highestPriceTracker[symbol];
                     botConfig.partialTaken[symbol] = false;
@@ -499,15 +513,44 @@ function runBotLoop() {
               else if (position.positionSide === 'SHORT') {
                 botConfig.lowestPriceTracker[symbol] = Math.min(botConfig.lowestPriceTracker[symbol] || entryPrice, currentPrice);
 
-                // ESCUDO PROTECTOR DINÁMICO (Opción B: Equilibrio)
+                // FIX Bug #3 (race condition): Toma parcial PRIMERO, antes del breakeven.
+                if (!botConfig.partialTaken[symbol] && botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 3.0)) {
+                  botConfig.partialTaken[symbol] = true;
+                  const info = getSymbolInfo(symbol);
+                  const halfQtyStr = (position.amount / 2).toFixed(info.qtyPrecision);
+                  const halfQty = parseFloat(halfQtyStr);
+                  const notional = halfQty * currentPrice;
+
+                  if (notional >= info.minNotional) {
+                    console.log(`[AutoBot] 💰 Toma Parcial (50%) en ${symbol} SHORT @ $${currentPrice}`);
+                    const closeRes = await bingxClient.closePosition(symbol, 'SHORT', halfQty);
+                    if (closeRes.success) {
+                      telegramBot.sendMessage(`💰 <b>TOMA PARCIAL (50%)</b>\n\n• Par: ${escHtml(symbol)}\n• Se cerraron ${halfQty} SHORT a +3x ATR.`);
+                      position.amount -= halfQty;
+                    } else {
+                      console.error(`[AutoBot] ⚠️ Error en Toma Parcial SHORT para ${symbol}:`, closeRes.message);
+                    }
+                  } else {
+                    console.log(`[AutoBot] ⚠️ Parcial ignorado en ${symbol} SHORT: nocional $${notional.toFixed(2)} menor al mínimo $${info.minNotional}`);
+                  }
+                }
+
+                // ESCUDO PROTECTOR DINÁMICO (Breakeven a 2.5x ATR) — ejecuta DESPUÉS del parcial
                 let stopLossCeiling = Infinity;
 
-                // FIX: retrasar breakeven a 2.5x ATR para darle espacio a la operación
                 if (botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 2.5)) {
-                  stopLossCeiling = entryPrice - (atr * 0.2); // Breakeven con margen mínimo para cubrir comisiones
+                  stopLossCeiling = entryPrice - (atr * 0.2);
                   if (!botConfig.breakevenTriggered[symbol]) {
                     botConfig.breakevenTriggered[symbol] = true;
-                    telegramBot.sendMessage(`🛡 <b>BREAKEVEN ACTIVADO</b>\n\n• Par: ${escHtml(symbol)}\n• SHORT protegida: SL movido a entrada (+0.4 ATR asegurados).`);
+                    const bePriceShort = parseFloat((entryPrice - (atr * 0.2)).toFixed(posInfo.pricePrecision));
+                    bingxClient.modifyStopLoss(symbol, 'SHORT', bePriceShort)
+                      .then(res => {
+                        const beMsg = res.success
+                          ? `🛡 <b>BREAKEVEN ACTIVADO</b>\n\n• Par: ${escHtml(symbol)}\n• SL real movido a $${escHtml(String(bePriceShort))} en BingX. Posición protegida incluso sin conexión.`
+                          : `⚠️ <b>BREAKEVEN (software fallback)</b>\n\n• Par: ${escHtml(symbol)}\n• Error al mover SL en BingX: ${escHtml(res.message)}\n• El bot lo gestiona en software como respaldo.`;
+                        telegramBot.sendMessage(beMsg);
+                      })
+                      .catch(() => telegramBot.sendMessage(`⚠️ <b>BREAKEVEN (software fallback)</b>\n\n• Par: ${escHtml(symbol)}\n• No se pudo actualizar el SL en BingX. Gestionando localmente.`));
                   }
                 }
 
@@ -524,7 +567,7 @@ function runBotLoop() {
                   telegramBot.sendMessage(`🛡 <b>SALIDA PROTEGIDA</b>\n\n• Par: ${escHtml(symbol)}\n• SHORT cerrada ${pnlStatus}.`);
                   botConfig.breakevenTriggered[symbol] = false;
                   botConfig.needsCleanup[symbol] = false;
-                  botConfig.lastSignals[symbol] = 'NONE'; // FIX: permite re-entrar si la misma señal vuelve
+                  botConfig.lastSignals[symbol] = 'NONE';
                   delete botConfig.tradeOpenTime[symbol];
                   delete botConfig.lowestPriceTracker[symbol];
                   botConfig.partialTaken[symbol] = false;
@@ -534,29 +577,7 @@ function runBotLoop() {
                   continue;
                 }
 
-                // TOMA PARCIAL (SCALE-OUT) A +4x ATR (subido de 3.5x para no interferir con TP del exchange en 5x ATR)
-                if (!botConfig.partialTaken[symbol] && botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 4.0)) {
-                  botConfig.partialTaken[symbol] = true;
-                  const info = getSymbolInfo(symbol);
-                  const halfQtyStr = (position.amount / 2).toFixed(info.qtyPrecision);
-                  const halfQty = parseFloat(halfQtyStr);
-                  const notional = halfQty * currentPrice;
-
-                  if (notional >= info.minNotional) {
-                    console.log(`[AutoBot] 💰 Toma Parcial (50%) en ${symbol} SHORT @ $${currentPrice}`);
-                    const closeRes = await bingxClient.closePosition(symbol, 'SHORT', halfQty);
-                    if (closeRes.success) {
-                      telegramBot.sendMessage(`💰 <b>TOMA PARCIAL (50%)</b>\n\n• Par: ${escHtml(symbol)}\n• Se cerraron ${halfQty} SHORT a +4x ATR.`);
-                      position.amount -= halfQty; // Ajustar volumen localmente
-                    } else {
-                      console.error(`[AutoBot] ⚠️ Error en Toma Parcial SHORT para ${symbol}:`, closeRes.message);
-                    }
-                  } else {
-                    console.log(`[AutoBot] ⚠️ Parcial ignorado en ${symbol} SHORT: nocional $${notional.toFixed(2)} menor al mínimo $${info.minNotional}`);
-                  }
-                }
-
-                // TRAILING STOP SHORT (inicia en 4.5x ATR, cerca del TP en 5x ATR)
+                // TRAILING STOP SHORT (inicia en 4.5x ATR, con TP del exchange ahora en 6x ATR)
                 if (botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 4.5)) {
                   const maxFavorableMovement = entryPrice - botConfig.lowestPriceTracker[symbol];
                   const triggerPrice = entryPrice - (maxFavorableMovement * 0.75);
@@ -573,7 +594,7 @@ function runBotLoop() {
                     telegramBot.sendMessage(`🛑 <b>TRAILING STOP — GANANCIA ASEGURADA</b>\n\n• Par: ${escHtml(symbol)}\n• Posición: SHORT\n• Cierre en: $${escHtml(currentPrice)}`);
                     botConfig.breakevenTriggered[symbol] = false;
                     botConfig.needsCleanup[symbol] = false;
-                    botConfig.lastSignals[symbol] = 'NONE'; // FIX: permite re-entrar si la misma señal vuelve
+                    botConfig.lastSignals[symbol] = 'NONE';
                     delete botConfig.tradeOpenTime[symbol];
                     delete botConfig.lowestPriceTracker[symbol];
                     botConfig.partialTaken[symbol] = false;
@@ -637,15 +658,17 @@ function runBotLoop() {
                 const adx1h = TechnicalAnalysis.calculateADX(klines1h);
                 const current1hPrice = closes1h[closes1h.length - 1];
 
-                // FILTRO 1: Solo bloquear si hay tendencia OPUESTA confirmada por EMAs de corto Y largo plazo
-                // BUY bloqueado → si el precio está bajo EMA20 Y bajo EMA50 en 1H (downtrend activo)
-                // SELL bloqueado → si el precio está sobre EMA20 Y sobre EMA50 en 1H (uptrend activo)
-                // La EMA200 NO se usa como filtro de bloqueo (tarda 8 días en reaccionar, inútil para scalping)
-                if (signal.includes('BUY') && current1hPrice < ema20_1h && current1hPrice < ema50_1h) {
-                  console.log(`[AutoBot] 🛡️ ${symbol}: BUY bloqueado — Tendencia bajista confirmada en 1H (precio $${current1hPrice} bajo EMA20 $${ema20_1h.toFixed(2)} y EMA50 $${ema50_1h.toFixed(2)}).`);
+                // FILTRO 1: Solo bloquear si el TREND de 1H está estructuralmente en contra.
+                // CORRECCIÓN: Antes bloqueaba BUY si precio < EMA20_1H && precio < EMA50_1H.
+                // Esto bloqueaba exactamente los pullbacks saludables (precio temporalmente bajo
+                // EMA20 en 1H = MEJOR momento para comprar en un uptrend). Ahora solo bloquea
+                // si EMA20 ya cruzó por debajo de EMA50 en 1H (downtrend estructural confirmado).
+                // Así los pullbacks sanos NO se bloquean, pero los downtrends reales SÍ.
+                if (signal.includes('BUY') && current1hPrice < ema20_1h && ema20_1h < ema50_1h) {
+                  console.log(`[AutoBot] 🛡️ ${symbol}: BUY bloqueado — Downtrend estructural confirmado en 1H (EMA20 ${ema20_1h.toFixed(2)} < EMA50 ${ema50_1h.toFixed(2)}).`);
                   signal = 'NEUTRAL';
-                } else if (signal.includes('SELL') && current1hPrice > ema20_1h && current1hPrice > ema50_1h) {
-                  console.log(`[AutoBot] 🛡️ ${symbol}: SELL bloqueado — Tendencia alcista confirmada en 1H (precio $${current1hPrice} sobre EMA20 $${ema20_1h.toFixed(2)} y EMA50 $${ema50_1h.toFixed(2)}).`);
+                } else if (signal.includes('SELL') && current1hPrice > ema20_1h && ema20_1h > ema50_1h) {
+                  console.log(`[AutoBot] 🛡️ ${symbol}: SELL bloqueado — Uptrend estructural confirmado en 1H (EMA20 ${ema20_1h.toFixed(2)} > EMA50 ${ema50_1h.toFixed(2)}).`);
                   signal = 'NEUTRAL';
                 }
 
@@ -745,8 +768,12 @@ function runBotLoop() {
           // Se usa un mínimo de 0.4% solo para evitar stops microscópicos en criptos muy paradas
           const atrDistance = analysis.atr > 0 ? Math.max(entryPrice * 0.004, analysis.atr * 2.5) : entryPrice * 0.005;
           const stopLoss = posSide === 'LONG' ? entryPrice - atrDistance : entryPrice + atrDistance;
-          // TP a 2:1 RR exacto (5.0x ATR desde la entrada)
-          const takeProfit = posSide === 'LONG' ? entryPrice + (atrDistance * 2.0) : entryPrice - (atrDistance * 2.0);
+          // FIX Bug #2: TP subido a 6x ATR (atrDistance * 2.4) para dejar espacio entre:
+          // - Toma parcial:  3.0x ATR  (lock temprano de ganancias)
+          // - Trailing stop: 4.5x ATR  (lock de la mayoría de la ganancia)
+          // - TP exchange:   6.0x ATR  (objetivo máximo — ya no compite con el trailing)
+          // RR resultante: SL a 2.5x ATR vs TP a 6x ATR = ratio 1:2.4
+          const takeProfit = posSide === 'LONG' ? entryPrice + (atrDistance * 2.4) : entryPrice - (atrDistance * 2.4);
 
           const riskCalc = RiskCalculator.calculate({
             accountBalance: balance.available > 0 ? balance.available : 10,

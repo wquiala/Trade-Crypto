@@ -144,7 +144,7 @@ export class TelegramBotService {
       };
 
       const isWeekend = [0, 6].includes(new Date().getUTCDay());
-      const minAdxReq = isWeekend ? 28 : 20;
+      const minAdxReq = isWeekend ? 18 : 15;
 
       const adxVal = analysis.adx ? analysis.adx.toFixed(1) : 'N/A';
       const adxEmoji = (analysis.adx || 0) >= minAdxReq ? '📈' : '⚪';
@@ -162,7 +162,7 @@ export class TelegramBotService {
     else if (command === '/adx') {
       const symbols = ['BTC-USDT', 'ETH-USDT', 'SOL-USDT', 'LINK-USDT', 'AVAX-USDT'];
       const isWeekend = [0, 6].includes(new Date().getUTCDay());
-      const minAdxReq = isWeekend ? 28 : 20;
+      const minAdxReq = isWeekend ? 18 : 15;
 
       let msg = `⚡ *Fuerza de Tendencia ADX (15m)* ${isWeekend ? '(🛡️ Fin de Semana)' : ''}\n\n`;
       for (const sym of symbols) {

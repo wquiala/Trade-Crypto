@@ -315,9 +315,9 @@ export class TechnicalAnalysis {
 
     // ─────────────────────────────────────────────────────────────────────────
     // FILTRO 2: ADX — Confirmar que hay tendencia real (no chop lateral)
-    // ADX < 18: mercado en rango/lateral → NEUTRAL obligatorio
+    // ADX < 15: mercado en rango/lateral → NEUTRAL obligatorio
     // ─────────────────────────────────────────────────────────────────────────
-    const MIN_ADX = isWeekend ? 22 : 20;
+    const MIN_ADX = isWeekend ? 18 : 15;
     if (adx > 0 && adx < MIN_ADX) {
       return {
         symbol, currentPrice, rsi, ema20, ema50, ema200, macd, bollinger, atr, volumeSMA, adx,
@@ -343,33 +343,34 @@ export class TechnicalAnalysis {
     let buyScore = 0;
     let sellScore = 0;
 
-    // ── RSI: Zona de momentum (no extremo, sino momentum saludable) ──
-    // FIX: unificada la lógica para evitar asimetrías donde el RSI 66 permitía entrada
-    // pero sumaba tan pocos puntos que nunca llegaba al umbral de confluencia.
+    // ── RSI: Zona de entrada — REBALANCEADO para favorecer pullbacks sobre momentum extendido ──
+    // Antes: RSI 50-68 daba +2.0 (misma puntuación que sobreventa), provocando entradas
+    // tardías cuando el movimiento ya había recorrido el 60-70% del impulso.
+    // Ahora: pullback (35-50) vale MÁS que momentum extendido (50-68), favoreciendo
+    // las entradas en zonas de rebote institucional donde el RR es mejor.
     if (rsi <= 35) {
-      // Sobreventa profunda — rebote potente si hay tendencia alcista macro
-      if (isMacroBullish) buyScore += 2.0;
+      // Sobreventa profunda — MEJOR entrada alcista (acumulación institucional)
+      if (isMacroBullish) buyScore += 2.5;
     } else if (rsi > 35 && rsi <= 50) {
-      // Zona de acumulación alcista
-      if (isMacroBullish) buyScore += 1.5;
+      // Pullback saludable en uptrend — SEGUNDO MEJOR punto de entrada
+      if (isMacroBullish) buyScore += 2.0;
     } else if (rsi > 50 && rsi < 68) {
-      // Momentum alcista en marcha (hasta 67.99 — el 68 exacto es umbral SELL)
-      if (isMacroBullish && isShortTermBullish) buyScore += 2.0;
-      else if (isMacroBullish) buyScore += 1.5;
+      // Momentum extendido — entrada tardía, necesita fuerte confirmación EMA+MACD
+      if (isMacroBullish && isShortTermBullish) buyScore += 1.5;
+      else if (isMacroBullish) buyScore += 1.0;
     }
 
     // RSI SELL — zonas mutuamente excluyentes respecto a BUY
-    // (no se puntúa SELL en las mismas zonas que puntuamos BUY para evitar señales ambiguas)
     if (rsi >= 68) {
-      // Sobrecompra profunda — corrección potente si hay tendencia bajista macro
-      if (isMacroBearish) sellScore += 2.0;
+      // Sobrecompra profunda — MEJOR entrada bajista
+      if (isMacroBearish) sellScore += 2.5;
     } else if (rsi < 68 && rsi >= 50) {
-      // Zona de distribución bajista
-      if (isMacroBearish) sellScore += 1.5;
+      // Distribución en downtrend — SEGUNDO MEJOR punto de entrada
+      if (isMacroBearish) sellScore += 2.0;
     } else if (rsi < 50 && rsi >= 32) {
-      // Momentum bajista en marcha
-      if (isMacroBearish && isShortTermBearish) sellScore += 2.0;
-      else if (isMacroBearish) sellScore += 1.5;
+      // Momentum bajista extendido — entrada tardía, necesita fuerte confirmación
+      if (isMacroBearish && isShortTermBearish) sellScore += 1.5;
+      else if (isMacroBearish) sellScore += 1.0;
     }
 
     // ── Estructura de EMAs (alineación tendencial) ──
