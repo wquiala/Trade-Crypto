@@ -17,7 +17,7 @@ jobs:
           username: ${{ secrets.AWS_USER }}
           key: ${{ secrets.AWS_SSH_KEY }}
           script: |
-            # Ir a la carpeta del proyecto
+            #Probando
             cd /var/www/html/Trade-Crypto
             
             # Descargar los últimos cambios
