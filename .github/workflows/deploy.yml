@@ -1,0 +1,33 @@
+name: Deploy to AWS EC2
+
+on:
+  push:
+    branches:
+      - main # O cambia a 'master' si esa es tu rama principal
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.AWS_HOST }}
+          username: ${{ secrets.AWS_USER }}
+          key: ${{ secrets.AWS_SSH_KEY }}
+          script: |
+            # Ir a la carpeta del proyecto
+            cd /var/www/html
+            
+            # Descargar los últimos cambios
+            git pull origin main
+            
+            # Instalar nuevas dependencias si las hay
+            npm install
+            
+            # Compilar el código
+            npm run build
+            
+            # Reiniciar PM2
+            pm2 restart trade-crypto || pm2 start dist/index.js --name trade-crypto

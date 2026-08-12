@@ -1,0 +1,67 @@
+{
+  "lastSignals": {
+    "BTC-USDT": "SELL",
+    "ETH-USDT": "NEUTRAL",
+    "AVAX-USDT": "NEUTRAL",
+    "LINK-USDT": "NEUTRAL",
+    "SOL-USDT": "NONE",
+    "PAXG-USDT": "NEUTRAL",
+    "BNB-USDT": "NEUTRAL",
+    "XRP-USDT": "NEUTRAL",
+    "DOGE-USDT": "NEUTRAL",
+    "SUI-USDT": "NEUTRAL"
+  },
+  "lastTradeTime": {
+    "LINK-USDT": 0,
+    "SOL-USDT": 0,
+    "AVAX-USDT": 0,
+    "PAXG-USDT": 0,
+    "BNB-USDT": 0,
+    "ETH-USDT": 0,
+    "XRP-USDT": 0,
+    "BTC-USDT": 1786477601915
+  },
+  "cooldownUntil": {
+    "BTC-USDT": 1786477575098,
+    "SOL-USDT": 1786477983936
+  },
+  "tradeOpenTime": {
+    "BTC-USDT": 1786477601915
+  },
+  "breakevenTriggered": {
+    "BTC-USDT": false,
+    "ETH-USDT": false,
+    "LINK-USDT": false,
+    "SOL-USDT": false,
+    "AVAX-USDT": false,
+    "PAXG-USDT": false,
+    "XRP-USDT": false,
+    "BNB-USDT": false
+  },
+  "partialTaken": {
+    "BTC-USDT": false,
+    "ETH-USDT": false,
+    "LINK-USDT": false,
+    "SOL-USDT": false,
+    "AVAX-USDT": false,
+    "PAXG-USDT": false,
+    "BNB-USDT": false,
+    "XRP-USDT": false,
+    "DOGE-USDT": false,
+    "SUI-USDT": false
+  },
+  "highestPriceTracker": {},
+  "lowestPriceTracker": {},
+  "forbiddenSide": {
+    "XRP-USDT": null,
+    "LINK-USDT": null,
+    "SOL-USDT": "SHORT"
+  },
+  "totalExecutedTrades": 90,
+  "startOfDayEquity": 83.4853,
+  "highestEquityToday": 100000,
+  "lastDrawdownDate": "2026-08-11",
+  "autoTradeEnabled": true,
+  "autoTradeDisabledByDrawdown": false,
+  "savedAt": "2026-08-11T19:46:41.915Z"
+}
