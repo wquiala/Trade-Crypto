@@ -772,6 +772,16 @@ function runBotLoop() {
 
           const factor = Math.pow(10, info.qtyPrecision);
           let quantity = Math.floor(riskCalc.positionSizeCoins * factor) / factor;
+          
+          // FIX: Límite de seguridad en el tamaño nocional de la posición para evitar rechazos del exchange.
+          // BingX tiene límites muy estrictos de tamaño máximo para ciertas monedas en VST.
+          let maxNotionalLimit = 50000; // Límite seguro general (50k USD)
+          if (symbol === 'PAXG-USDT') maxNotionalLimit = 900; // PAXG tiene un límite de 1000 USDT en VST
+          
+          if (quantity * entryPrice > maxNotionalLimit) {
+            quantity = Math.floor((maxNotionalLimit / entryPrice) * factor) / factor;
+            console.log(`[AutoBot] ℹ️ ${symbol}: Tamaño de posición reducido artificialmente al límite máximo nocional de $${maxNotionalLimit}`);
+          }
 
           if (quantity === 0 || quantity * entryPrice < info.minNotional) {
             const minQty = Math.ceil((info.minNotional / entryPrice) * factor) / factor;
