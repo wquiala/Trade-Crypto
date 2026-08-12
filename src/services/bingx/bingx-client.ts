@@ -505,10 +505,16 @@ export class BingXClient {
       if (response.data && response.data.code === 0 && response.data.data?.orders) {
         const orders = response.data.data.orders;
 
-        // Filtrar órdenes cerradas reales (reduceOnly)
+        // Filtrar órdenes cerradas reales:
+        // BingX puede devolver reduceOnly=false en cierres por SL/TP (es un bug de su API).
+        // Filtramos por: estado FILLED + (reduceOnly=true OR tipo es cierre OR tiene profit no nulo)
         const closedOrders = orders.filter((o: any) =>
-          o.status === 'FILLED' &&
-          o.reduceOnly === true
+          o.status === 'FILLED' && (
+            o.reduceOnly === true ||
+            o.type === 'STOP_MARKET' ||
+            o.type === 'TAKE_PROFIT_MARKET' ||
+            (parseFloat(o.profit || '0') !== 0) // tiene profit registrado = es cierre real
+          )
         );
 
         // Ordenar por tiempo de forma descendente (más recientes primero)

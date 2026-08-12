@@ -82,10 +82,10 @@ Responde SIEMPRE en JSON exacto:
 
 Criterios de VETO ESTRICTOS (evalúa matemáticamente sin inventar datos):
 1. Si ATR% < 0.10% → chop muerto sin volatilidad, VETA.
-2. Si ADX < 19 → mercado lateral o sin fuerza institucional, VETA. (Nota: Si ADX es >= 19, NO puedes aplicar este veto).
+2. Si ADX < 20 → mercado lateral o sin fuerza institucional, VETA. (Si ADX >= 20, NO puedes aplicar este veto).
 3. Si señal BUY con RSI > 74 → sobre-compra extrema y agotamiento de tendencia, VETA.
 4. Si señal SELL con RSI < 26 → sobre-venta extrema y agotamiento de tendencia, VETA.
-5. Si hora UTC entre 00-06 Y el ADX es menor a 20 → baja liquidez institucional en madrugada, VETA.
+5. Si hora UTC entre 00-06 Y el ADX es menor a 22 → baja liquidez institucional en madrugada, VETA.
 6. Si ATR% > 3.5% → volatilidad extrema, slippage peligroso, VETA.
 7. Si notas cualquier incoherencia o falta de confluencia en el resumen técnico, VETA.
 

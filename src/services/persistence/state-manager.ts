@@ -57,10 +57,17 @@ export function loadBotState(): PersistedState {
       console.log(`[StateManager] ✅ Estado del bot restaurado desde disco (guardado: ${parsed.savedAt || 'N/A'})`);
 
       // Limpiar cooldowns expirados al cargar (cooldowns que ya pasaron no tienen sentido)
+      // FIX: también limpiar forbiddenSide si el cooldown asociado ya expiró.
+      // Sin esto, si el bot se reinicia con un cooldown expirado, forbiddenSide queda
+      // bloqueado para siempre en una dirección aunque el periodo de castigo ya terminó.
       const now = Date.now();
       for (const symbol of Object.keys(parsed.cooldownUntil || {})) {
         if (parsed.cooldownUntil[symbol] < now) {
           delete parsed.cooldownUntil[symbol];
+          // Liberar también el veto de dirección asociado
+          if (parsed.forbiddenSide?.[symbol]) {
+            parsed.forbiddenSide[symbol] = null;
+          }
         }
       }
 

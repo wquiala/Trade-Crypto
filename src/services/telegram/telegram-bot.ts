@@ -132,7 +132,7 @@ export class TelegramBotService {
       await this.sendMessageToChat(chatId, msg);
     } 
     else if (command === '/signals') {
-      const klines = await bingxClient.getKlines('BTC-USDT', '15m', 200);
+      const klines = await bingxClient.getKlines('BTC-USDT', '15m', 750); // Mismo límite que el loop del bot para consistencia
       const analysis = TechnicalAnalysis.analyze('BTC-USDT', klines);
 
       const emojiMap = {
@@ -167,7 +167,7 @@ export class TelegramBotService {
       let msg = `⚡ *Fuerza de Tendencia ADX (15m)* ${isWeekend ? '(🛡️ Fin de Semana)' : ''}\n\n`;
       for (const sym of symbols) {
         try {
-          const k = await bingxClient.getKlines(sym, '15m', 100);
+          const k = await bingxClient.getKlines(sym, '15m', 750); // 750 velas para EMA200 confiable
           const a = TechnicalAnalysis.analyze(sym, k);
           const adx = a.adx ? a.adx.toFixed(1) : '0';
           const icon = (a.adx || 0) >= minAdxReq ? '🟢' : '⚪';

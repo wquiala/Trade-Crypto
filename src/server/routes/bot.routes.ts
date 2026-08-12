@@ -127,7 +127,7 @@ export let botConfig: BotConfig = {
   monitoredSymbols: ['BTC-USDT', 'ETH-USDT', 'AVAX-USDT', 'LINK-USDT', 'SOL-USDT', 'PAXG-USDT', 'BNB-USDT', 'XRP-USDT', 'DOGE-USDT', 'SUI-USDT'],
   interval: '15m',
   strategy: 'CONFLUENCE_TA',
-  riskPerTradePercent: 3.0, // 🔥 Configurado al 3% para que el tamaño de posición sea rentable y supere las comisiones
+  riskPerTradePercent: 1.0, // Reducido a 1% para cuenta VST (100k) — evita órdenes gigantes rechazadas por BingX. Volver a 3% en cuenta real.
   maxLeverage: 20,
   // Se restauran desde disco: si el proceso se reinició justo después de un
   // circuit breaker diario, el bot debe arrancar PAUSADO, no reactivarse solo.
@@ -135,7 +135,7 @@ export let botConfig: BotConfig = {
   dailyDrawdownLimitPct: 4.0,
   autoTradeDisabledByDrawdown: persistedState.autoTradeDisabledByDrawdown,
   useTrailingStop: true,
-  useEarlyExit: true,   // Cierra en reversión fuerte de tendencia (STRONG signal opuesta)
+  useEarlyExit: false,  // DESACTIVADO: en 15m el ruido genera señales STRONG falsas que cierran operaciones ganadoras prematuramente.
   currentAtr: {},
   needsCleanup: {},
   lastScanTime: Date.now(),
@@ -358,7 +358,7 @@ function runBotLoop() {
       // ─────────────────────────────────────────────────────────────────────
       for (const symbol of botConfig.monitoredSymbols) {
         try {
-          const klines = await bingxClient.getKlines(symbol, botConfig.interval, 250);
+          const klines = await bingxClient.getKlines(symbol, botConfig.interval, 750); // 750 velas 15m = ~7.8 días. EMA200 tiene 550 velas de warmup (antes: 50)
           const closedKlines = klines.slice(0, -1);
           if (closedKlines.length < 50) continue;
 
@@ -445,8 +445,8 @@ function runBotLoop() {
                   continue;
                 }
 
-                // TOMA PARCIAL (SCALE-OUT) A +3.5x ATR
-                if (!botConfig.partialTaken[symbol] && botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 3.5)) {
+                // TOMA PARCIAL (SCALE-OUT) A +4x ATR (subido de 3.5x para no interferir con el TP del exchange en 5x ATR)
+                if (!botConfig.partialTaken[symbol] && botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 4.0)) {
                   botConfig.partialTaken[symbol] = true;
                   const info = getSymbolInfo(symbol);
                   const halfQtyStr = (position.amount / 2).toFixed(info.qtyPrecision);
@@ -457,7 +457,7 @@ function runBotLoop() {
                     console.log(`[AutoBot] 💰 Toma Parcial (50%) en ${symbol} LONG @ $${currentPrice}`);
                     const closeRes = await bingxClient.closePosition(symbol, 'LONG', halfQty);
                     if (closeRes.success) {
-                      telegramBot.sendMessage(`💰 <b>TOMA PARCIAL (50%)</b>\n\n• Par: ${escHtml(symbol)}\n• Se cerraron ${halfQty} LONG a +3.0x ATR.`);
+                      telegramBot.sendMessage(`💰 <b>TOMA PARCIAL (50%)</b>\n\n• Par: ${escHtml(symbol)}\n• Se cerraron ${halfQty} LONG a +4x ATR.`);
                       position.amount -= halfQty; // Ajustar volumen localmente para el resto de comprobaciones
                     } else {
                       console.error(`[AutoBot] ⚠️ Error en Toma Parcial LONG para ${symbol}:`, closeRes.message);
@@ -467,8 +467,8 @@ function runBotLoop() {
                   }
                 }
 
-                // TRAILING STOP: retiene 75% de la ganancia máxima (inicia en 3.5x ATR)
-                if (botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 3.5)) {
+                // TRAILING STOP: retiene 75% de la ganancia máxima (inicia en 4.5x ATR, muy cerca del TP en 5x ATR)
+                if (botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 4.5)) {
                   const maxFavorableMovement = botConfig.highestPriceTracker[symbol] - entryPrice;
                   const triggerPrice = entryPrice + (maxFavorableMovement * 0.75);
 
@@ -534,8 +534,8 @@ function runBotLoop() {
                   continue;
                 }
 
-                // TOMA PARCIAL (SCALE-OUT) A +3.5x ATR
-                if (!botConfig.partialTaken[symbol] && botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 3.5)) {
+                // TOMA PARCIAL (SCALE-OUT) A +4x ATR (subido de 3.5x para no interferir con TP del exchange en 5x ATR)
+                if (!botConfig.partialTaken[symbol] && botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 4.0)) {
                   botConfig.partialTaken[symbol] = true;
                   const info = getSymbolInfo(symbol);
                   const halfQtyStr = (position.amount / 2).toFixed(info.qtyPrecision);
@@ -546,7 +546,7 @@ function runBotLoop() {
                     console.log(`[AutoBot] 💰 Toma Parcial (50%) en ${symbol} SHORT @ $${currentPrice}`);
                     const closeRes = await bingxClient.closePosition(symbol, 'SHORT', halfQty);
                     if (closeRes.success) {
-                      telegramBot.sendMessage(`💰 <b>TOMA PARCIAL (50%)</b>\n\n• Par: ${escHtml(symbol)}\n• Se cerraron ${halfQty} SHORT a +3.0x ATR.`);
+                      telegramBot.sendMessage(`💰 <b>TOMA PARCIAL (50%)</b>\n\n• Par: ${escHtml(symbol)}\n• Se cerraron ${halfQty} SHORT a +4x ATR.`);
                       position.amount -= halfQty; // Ajustar volumen localmente
                     } else {
                       console.error(`[AutoBot] ⚠️ Error en Toma Parcial SHORT para ${symbol}:`, closeRes.message);
@@ -556,8 +556,8 @@ function runBotLoop() {
                   }
                 }
 
-                // TRAILING STOP SHORT (inicia en 3.5x ATR)
-                if (botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 3.5)) {
+                // TRAILING STOP SHORT (inicia en 4.5x ATR, cerca del TP en 5x ATR)
+                if (botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 4.5)) {
                   const maxFavorableMovement = entryPrice - botConfig.lowestPriceTracker[symbol];
                   const triggerPrice = entryPrice - (maxFavorableMovement * 0.75);
 
@@ -621,38 +621,43 @@ function runBotLoop() {
           else if (signal.includes('SELL') && analysis.currentPrice > analysis.ema200 * 0.999) signal = 'NEUTRAL';
 
           // ─── FILTRO INSTITUCIONAL MULTI-TIMEFRAME (1 HORA) ────────────────
-          // Regla: la señal de 15m SOLO es válida si el contexto de 1H la apoya.
-          // Evita entrar en contra de pumps/dumps violentos de temporalidad superior.
+          // Regla: solo bloquear si el mercado en 1H tiene una tendencia OPUESTA
+          // clara y confirmada (AMBAS EMAs contra la señal = AND, no OR).
+          // El filtro OR anterior era demasiado restrictivo: en cripto el precio
+          // puede estar sobre la EMA200 anual pero en caída libre vs la EMA50 —
+          // eso es exactamente cuando hay que entrar SHORT.
           if (signal !== 'NEUTRAL') {
             try {
-              const klines1h = await bingxClient.getKlines(symbol, '1h', 250);
+              const klines1h = await bingxClient.getKlines(symbol, '1h', 500); // 500 velas 1H = ~20 días. EMA200 tiene 300 velas de warmup (antes: 50)
               if (klines1h && klines1h.length >= 50) {
                 const closes1h = klines1h.map(k => k.close);
+                const ema20_1h = TechnicalAnalysis.calculateEMA(closes1h, 20);
                 const ema50_1h = TechnicalAnalysis.calculateEMA(closes1h, Math.min(50, closes1h.length - 1));
-                const ema200_1h = TechnicalAnalysis.calculateEMA(closes1h, Math.min(200, closes1h.length - 1));
+                // ema200_1h eliminada: reacciona en ~8 dias, ineficaz para scalping 15m. Solo se usan ema20 y ema50.
                 const adx1h = TechnicalAnalysis.calculateADX(klines1h);
                 const current1hPrice = closes1h[closes1h.length - 1];
 
-                // FILTRO 1: Bloquear si el precio contradice CUALQUIERA de las EMAs de 1H
-                // (cambio de AND a OR: evita entrar en contra de tendencias institucionales)
-                if (signal.includes('BUY') && (current1hPrice < ema200_1h || current1hPrice < ema50_1h)) {
-                  console.log(`[AutoBot] 🛡️ ${symbol}: BUY bloqueado por Filtro 1H (Precio $${current1hPrice} bajo EMA50 $${ema50_1h.toFixed(2)} o EMA200 $${ema200_1h.toFixed(2)}).`);
+                // FILTRO 1: Solo bloquear si hay tendencia OPUESTA confirmada por EMAs de corto Y largo plazo
+                // BUY bloqueado → si el precio está bajo EMA20 Y bajo EMA50 en 1H (downtrend activo)
+                // SELL bloqueado → si el precio está sobre EMA20 Y sobre EMA50 en 1H (uptrend activo)
+                // La EMA200 NO se usa como filtro de bloqueo (tarda 8 días en reaccionar, inútil para scalping)
+                if (signal.includes('BUY') && current1hPrice < ema20_1h && current1hPrice < ema50_1h) {
+                  console.log(`[AutoBot] 🛡️ ${symbol}: BUY bloqueado — Tendencia bajista confirmada en 1H (precio $${current1hPrice} bajo EMA20 $${ema20_1h.toFixed(2)} y EMA50 $${ema50_1h.toFixed(2)}).`);
                   signal = 'NEUTRAL';
-                } else if (signal.includes('SELL') && (current1hPrice > ema200_1h || current1hPrice > ema50_1h)) {
-                  console.log(`[AutoBot] 🛡️ ${symbol}: SELL bloqueado por Filtro 1H (Precio $${current1hPrice} sobre EMA50 $${ema50_1h.toFixed(2)} o EMA200 $${ema200_1h.toFixed(2)}).`);
+                } else if (signal.includes('SELL') && current1hPrice > ema20_1h && current1hPrice > ema50_1h) {
+                  console.log(`[AutoBot] 🛡️ ${symbol}: SELL bloqueado — Tendencia alcista confirmada en 1H (precio $${current1hPrice} sobre EMA20 $${ema20_1h.toFixed(2)} y EMA50 $${ema50_1h.toFixed(2)}).`);
                   signal = 'NEUTRAL';
                 }
 
-                // FILTRO 2: Bloquear si el mercado en 1H está en chop (ADX < 18)
-                // Un ADX bajo en 1H significa que aunque los indicadores de 15m griten "BUY",
-                // el mercado en realidad está girando en lateral y cualquier Stop Loss puede saltar.
-                if (signal !== 'NEUTRAL' && adx1h > 0 && adx1h < 18) {
-                  console.log(`[AutoBot] 🛡️ ${symbol}: ${signal} bloqueado — ADX de 1H muy débil (${adx1h} < 18). Mercado en rango lateral.`);
+                // FILTRO 2: Bloquear en chop lateral de 1H (ADX < 15)
+                // Umbral bajado de 18→15: no queremos filtrar demasiado, solo el chop más extremo.
+                if (signal !== 'NEUTRAL' && adx1h > 0 && adx1h < 15) {
+                  console.log(`[AutoBot] 🛡️ ${symbol}: ${signal} bloqueado — ADX de 1H muy débil (${adx1h} < 15). Mercado en chop puro.`);
                   signal = 'NEUTRAL';
                 }
               }
             } catch (err1h) {
-              console.warn(`[AutoBot] ⚠️ No se pudo verificar tendencia de 1H para ${symbol}, evaluando en 15m.`);
+              console.warn(`[AutoBot] ⚠️ No se pudo verificar tendencia de 1H para ${symbol}, evaluando solo 15m.`);
             }
           }
 

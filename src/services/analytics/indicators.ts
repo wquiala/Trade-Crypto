@@ -352,22 +352,24 @@ export class TechnicalAnalysis {
     } else if (rsi > 35 && rsi <= 50) {
       // Zona de acumulación alcista
       if (isMacroBullish) buyScore += 1.5;
-    } else if (rsi > 50 && rsi <= 68) {
-      // Momentum alcista en marcha — ampliado hasta 68 con puntuación consistente
+    } else if (rsi > 50 && rsi < 68) {
+      // Momentum alcista en marcha (hasta 67.99 — el 68 exacto es umbral SELL)
       if (isMacroBullish && isShortTermBullish) buyScore += 2.0;
-      else if (isMacroBullish) buyScore += 1.5; // FIX: era 1.0, subido a 1.5 para ser consistente
+      else if (isMacroBullish) buyScore += 1.5;
     }
 
-    if (rsi >= 65) {
-      // Sobrecompra profunda — correción potente si hay tendencia bajista macro
+    // RSI SELL — zonas mutuamente excluyentes respecto a BUY
+    // (no se puntúa SELL en las mismas zonas que puntuamos BUY para evitar señales ambiguas)
+    if (rsi >= 68) {
+      // Sobrecompra profunda — corrección potente si hay tendencia bajista macro
       if (isMacroBearish) sellScore += 2.0;
-    } else if (rsi < 65 && rsi >= 50) {
+    } else if (rsi < 68 && rsi >= 50) {
       // Zona de distribución bajista
       if (isMacroBearish) sellScore += 1.5;
     } else if (rsi < 50 && rsi >= 32) {
-      // Momentum bajista en marcha — ampliado hasta 32, puntuación consistente
+      // Momentum bajista en marcha
       if (isMacroBearish && isShortTermBearish) sellScore += 2.0;
-      else if (isMacroBearish) sellScore += 1.5; // FIX: era 1.0, consistente con la lógica de BUY
+      else if (isMacroBearish) sellScore += 1.5;
     }
 
     // ── Estructura de EMAs (alineación tendencial) ──
@@ -403,19 +405,20 @@ export class TechnicalAnalysis {
       if (isMacroBearish && sellScore > buyScore) sellScore += 0.5;
     }
 
-    const canBuyRsi = rsi >= 30 && rsi <= 68;
+    const canBuyRsi = rsi >= 30 && rsi < 68;   // Estrictamente < 68 para no solapar con zona SELL
     const canSellRsi = rsi >= 32 && rsi <= 70;
 
     // ─────────────────────────────────────────────────────────────────────────
-    // VETO ANTI-TREN (Evitar operar contra pumps/dumps violentos)
+    // VETO ANTI-TREN (Solo cuando hay tendencia MUY fuerte confirmada por ADX)
     // ─────────────────────────────────────────────────────────────────────────
-    // Si la tendencia a corto plazo es fuertemente alcista (tren), prohibimos los SHORTS 
-    // hasta que al menos el precio rompa por debajo de la EMA20 mostrando debilidad.
-    if (isShortTermBullish && currentPrice > ema20) {
+    // FIX: antes el veto se aplicaba siempre que EMA20 > EMA50, lo que bloqueaba
+    // SHORTs durante semanas enteras en bull markets y perdía los mejores puntos
+    // de entrada bajista. Ahora solo se aplica cuando ADX > 30 (tendencia activa
+    // y fuerte), que es cuando realmente el mercado tiene momentum unidireccional.
+    if (adx >= 30 && isShortTermBullish && currentPrice > ema20) {
       sellScore = 0;
     }
-    // Igual para largos en dumps violentos.
-    if (isShortTermBearish && currentPrice < ema20) {
+    if (adx >= 30 && isShortTermBearish && currentPrice < ema20) {
       buyScore = 0;
     }
 
