@@ -18,16 +18,23 @@ jobs:
           key: ${{ secrets.AWS_SSH_KEY }}
           script: |
             #Probando
+
+            # Detener el proceso si existe, pero no fallar si no existe
+            pm2 stop trade-crypto || true
+            
             cd /var/www/html/Trade-Crypto
             
             # Descargar los últimos cambios
             git pull origin main
             
-            # Instalar nuevas dependencias si las hay
-            pnpm install
+            # Instalar nuevas dependencias si las hay (usando npm si pnpm no está en el VPS)
+            pnpm install || npm install
             
             # Compilar el código
             npm run build
             
-            # Reiniciar PM2
+            # Iniciar o reiniciar PM2
             pm2 restart trade-crypto || pm2 start dist/index.js --name trade-crypto
+            
+            # Guardar la configuración de PM2
+            pm2 save
