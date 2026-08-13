@@ -127,7 +127,7 @@ export let botConfig: BotConfig = {
   monitoredSymbols: ['BTC-USDT', 'ETH-USDT', 'AVAX-USDT', 'LINK-USDT', 'SOL-USDT', 'PAXG-USDT', 'BNB-USDT', 'XRP-USDT', 'DOGE-USDT', 'SUI-USDT'],
   interval: '5m', // MICRO-SCALPING: 5m en lugar de 15m para entradas más rápidas
   strategy: 'CONFLUENCE_TA',
-  riskPerTradePercent: 1.0, 
+  riskPerTradePercent: 1.0,
   maxLeverage: 20,
   // Se restauran desde disco: si el proceso se reinició justo después de un
   // circuit breaker diario, el bot debe arrancar PAUSADO, no reactivarse solo.
@@ -334,22 +334,22 @@ function runBotLoop() {
               if (shouldExitLong || shouldExitShort) {
                 const exitSide = shouldExitLong ? 'LONG' : 'SHORT';
                 console.log(`[AutoBot] 🏃‍♂️ Early Exit detectado en ${symbol} ${exitSide} (Señal invertida a ${liveAnalysis.signal})`);
-                
-                try { await bingxClient.cancelAllPendingOrders(symbol); } catch (_) {}
+
+                try { await bingxClient.cancelAllPendingOrders(symbol); } catch (_) { }
                 const closeRes = await bingxClient.closePosition(symbol, exitSide);
-                
+
                 if (!closeRes.success) {
                   telegramBot.sendMessage(`⚠️ <b>ERROR EN EARLY EXIT</b>\n\n• Par: ${escHtml(symbol)}\n• Motivo: ${escHtml(closeRes.message)}\n• Se reintentará en el siguiente ciclo.`);
                 } else {
                   telegramBot.sendMessage(`🏃‍♂️ <b>EARLY EXIT (Salida de Emergencia)</b>\n\n• Par: ${escHtml(symbol)}\n• Posición: ${escHtml(exitSide)}\n• Razón: La tendencia se invirtió bruscamente (${escHtml(liveAnalysis.signal)}).`);
-                  
+
                   botConfig.needsCleanup[symbol] = false;
                   botConfig.lastSignals[symbol] = 'NONE'; // FIX: permite re-entrar si la misma señal vuelve
                   delete botConfig.tradeOpenTime[symbol];
                   delete botConfig.highestPriceTracker[symbol];
                   delete botConfig.lowestPriceTracker[symbol];
                   botConfig.partialTaken[symbol] = false;
-                  botConfig.cooldownUntil[symbol] = Date.now() + 60 * 60 * 1000;
+                  botConfig.cooldownUntil[symbol] = Date.now() + 15 * 60 * 1000; // MICRO-SCALPING: 15 min de cooldown (3 velas)
                   botConfig.lastTradeTime[symbol] = 0;
                   persistState();
                   continue;
@@ -362,8 +362,8 @@ function runBotLoop() {
                 botConfig.highestPriceTracker[symbol] = Math.max(botConfig.highestPriceTracker[symbol] || entryPrice, currentPrice);
 
                 // FIX Bug #3 (race condition): Toma parcial PRIMERO, antes del breakeven.
-                // TOMA PARCIAL (SCALE-OUT) A +2x ATR — MICRO-SCALPING
-                if (!botConfig.partialTaken[symbol] && botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 2.0)) {
+                // TOMA PARCIAL (SCALE-OUT) A +1.2x ATR — GANANCIAS RÁPIDAS
+                if (!botConfig.partialTaken[symbol] && botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 1.2)) {
                   botConfig.partialTaken[symbol] = true;
                   const info = getSymbolInfo(symbol);
                   const halfQtyStr = (position.amount / 2).toFixed(info.qtyPrecision);
@@ -384,11 +384,11 @@ function runBotLoop() {
                   }
                 }
 
-                // ESCUDO PROTECTOR DINÁMICO (Breakeven a 1.2x ATR) - MICRO-SCALPING
-                // Protegemos rápido apenas se mueva a favor.
+                // ESCUDO PROTECTOR DINÁMICO (Breakeven a 0.8x ATR)
+                // Protegemos rapidísimo apenas estemos en verde.
                 let stopLossFloor = -Infinity;
 
-                if (botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 1.2)) {
+                if (botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 0.8)) {
                   stopLossFloor = entryPrice + (atr * 0.2); // Breakeven con margen mínimo para cubrir comisiones
                   if (!botConfig.breakevenTriggered[symbol]) {
                     botConfig.breakevenTriggered[symbol] = true;
@@ -421,14 +421,14 @@ function runBotLoop() {
                   delete botConfig.tradeOpenTime[symbol];
                   delete botConfig.highestPriceTracker[symbol];
                   botConfig.partialTaken[symbol] = false;
-                  botConfig.cooldownUntil[symbol] = Date.now() + 60 * 60 * 1000;
+                  botConfig.cooldownUntil[symbol] = Date.now() + 15 * 60 * 1000; // MICRO-SCALPING: 15 min de cooldown
                   botConfig.lastTradeTime[symbol] = 0;
                   persistState();
                   continue;
                 }
 
-                // TRAILING STOP: retiene 75% de la ganancia máxima (inicia en 3.0x ATR) - MICRO-SCALPING
-                if (botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 3.0)) {
+                // TRAILING STOP: retiene 75% de la ganancia máxima (inicia en 2.0x ATR)
+                if (botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 2.0)) {
                   const maxFavorableMovement = botConfig.highestPriceTracker[symbol] - entryPrice;
                   const triggerPrice = entryPrice + (maxFavorableMovement * 0.75);
 
@@ -448,7 +448,7 @@ function runBotLoop() {
                     delete botConfig.tradeOpenTime[symbol];
                     delete botConfig.highestPriceTracker[symbol];
                     botConfig.partialTaken[symbol] = false;
-                    botConfig.cooldownUntil[symbol] = Date.now() + 30 * 60 * 1000;
+                    botConfig.cooldownUntil[symbol] = Date.now() + 10 * 60 * 1000; // MICRO-SCALPING: 10 min de cooldown tras trailing stop
                     botConfig.lastTradeTime[symbol] = 0;
                     persistState();
                     continue;
@@ -460,8 +460,8 @@ function runBotLoop() {
                 botConfig.lowestPriceTracker[symbol] = Math.min(botConfig.lowestPriceTracker[symbol] || entryPrice, currentPrice);
 
                 // FIX Bug #3 (race condition): Toma parcial PRIMERO, antes del breakeven.
-                // TOMA PARCIAL (SCALE-OUT) A +2x ATR — MICRO-SCALPING
-                if (!botConfig.partialTaken[symbol] && botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 2.0)) {
+                // TOMA PARCIAL (SCALE-OUT) A +1.2x ATR — GANANCIAS RÁPIDAS
+                if (!botConfig.partialTaken[symbol] && botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 1.2)) {
                   botConfig.partialTaken[symbol] = true;
                   const info = getSymbolInfo(symbol);
                   const halfQtyStr = (position.amount / 2).toFixed(info.qtyPrecision);
@@ -482,10 +482,10 @@ function runBotLoop() {
                   }
                 }
 
-                // ESCUDO PROTECTOR DINÁMICO (Breakeven a 1.2x ATR) — ejecuta DESPUÉS del parcial
+                // ESCUDO PROTECTOR DINÁMICO (Breakeven a 0.8x ATR)
                 let stopLossCeiling = Infinity;
 
-                if (botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 1.2)) {
+                if (botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 0.8)) {
                   stopLossCeiling = entryPrice - (atr * 0.2);
                   if (!botConfig.breakevenTriggered[symbol]) {
                     botConfig.breakevenTriggered[symbol] = true;
@@ -518,14 +518,14 @@ function runBotLoop() {
                   delete botConfig.tradeOpenTime[symbol];
                   delete botConfig.lowestPriceTracker[symbol];
                   botConfig.partialTaken[symbol] = false;
-                  botConfig.cooldownUntil[symbol] = Date.now() + 60 * 60 * 1000;
+                  botConfig.cooldownUntil[symbol] = Date.now() + 15 * 60 * 1000; // MICRO-SCALPING: 15 min de cooldown
                   botConfig.lastTradeTime[symbol] = 0;
                   persistState();
                   continue;
                 }
 
-                // TRAILING STOP SHORT (inicia en 3.0x ATR) - MICRO-SCALPING
-                if (botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 3.0)) {
+                // TRAILING STOP SHORT (inicia en 2.0x ATR)
+                if (botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 2.0)) {
                   const maxFavorableMovement = entryPrice - botConfig.lowestPriceTracker[symbol];
                   const triggerPrice = entryPrice - (maxFavorableMovement * 0.75);
 
@@ -545,7 +545,7 @@ function runBotLoop() {
                     delete botConfig.tradeOpenTime[symbol];
                     delete botConfig.lowestPriceTracker[symbol];
                     botConfig.partialTaken[symbol] = false;
-                    botConfig.cooldownUntil[symbol] = Date.now() + 30 * 60 * 1000;
+                    botConfig.cooldownUntil[symbol] = Date.now() + 10 * 60 * 1000; // MICRO-SCALPING: 10 min de cooldown tras trailing stop
                     botConfig.lastTradeTime[symbol] = 0;
                     persistState();
                     continue;
@@ -601,7 +601,7 @@ function runBotLoop() {
                 const closes15m = klines15m.map(k => k.close);
                 const ema20_15m = TechnicalAnalysis.calculateEMA(closes15m, 20);
                 const ema50_15m = TechnicalAnalysis.calculateEMA(closes15m, Math.min(50, closes15m.length - 1));
-                
+
                 const adx15m = TechnicalAnalysis.calculateADX(klines15m);
                 const current15mPrice = closes15m[closes15m.length - 1];
 
@@ -668,27 +668,10 @@ function runBotLoop() {
             forbiddenOverridden = true;
           }
 
-          const aiValidation = await withTimeout(
-            AiRiskManager.validateTrade({
-              symbol,
-              signal: side,
-              currentPrice: analysis.currentPrice,
-              rsi: analysis.rsi,
-              ema20: analysis.ema20,
-              ema50: analysis.ema50,
-              ema200: analysis.ema200,
-              macd: analysis.macd,
-              adx: analysis.adx,
-              atrPercent: analysis.currentPrice > 0 ? (analysis.atr / analysis.currentPrice) * 100 : 0,
-              isWeekend: [0, 6].includes(new Date().getUTCDay()),
-              summary: analysis.summary
-            }),
-            8000,
-            { approved: false, confidence: 0, reason: 'Timeout: la IA no respondió en 8s, se descarta la entrada por seguridad.' }
-          );
-
-          if (!aiValidation.approved || aiValidation.confidence < AiRiskManager.MIN_CONFIDENCE_TO_APPROVE) {
-            // lastSignals no fue cambiado — la señal se puede reintentar tras el cooldown
+          // IA DESACTIVADA TEMPORALMENTE (a petición del usuario para mayor velocidad)
+          const aiValidation = { approved: true, confidence: 100, reason: 'IA DESACTIVADA (Micro-Scalping)' };
+          
+          if (!aiValidation.approved) {
             botConfig.cooldownUntil[symbol] = Date.now() + 15 * 60 * 1000;
             continue;
           }
@@ -697,13 +680,12 @@ function runBotLoop() {
           const entryPrice = analysis.currentPrice;
           const info = getSymbolInfo(symbol);
 
-          // SL dinámico a 1.2x ATR (Micro-Scalping)
-          // Se usa un mínimo de 0.2% (bajado del 0.4%) para permitir stops más ceñidos
-          const atrDistance = analysis.atr > 0 ? Math.max(entryPrice * 0.002, analysis.atr * 1.2) : entryPrice * 0.003;
+          // SL dinámico a 1.0x ATR (Ultra Micro-Scalping)
+          const atrDistance = analysis.atr > 0 ? Math.max(entryPrice * 0.002, analysis.atr * 1.0) : entryPrice * 0.003;
           const stopLoss = posSide === 'LONG' ? entryPrice - atrDistance : entryPrice + atrDistance;
-          // TP subido a 4.5x ATR (que equivale a atrDistance * 3.75 ya que atrDistance es 1.2x ATR)
-          // RR resultante: SL a 1.2x ATR vs TP a 4.5x ATR = ratio 1:3.75
-          const takeProfit = posSide === 'LONG' ? entryPrice + (atrDistance * 3.75) : entryPrice - (atrDistance * 3.75);
+          
+          // TP exchange a 3.0x ATR
+          const takeProfit = posSide === 'LONG' ? entryPrice + (atrDistance * 3.0) : entryPrice - (atrDistance * 3.0);
 
           const riskCalc = RiskCalculator.calculate({
             accountBalance: balance.available > 0 ? balance.available : 10,
@@ -729,12 +711,12 @@ function runBotLoop() {
 
           const factor = Math.pow(10, info.qtyPrecision);
           let quantity = Math.floor(riskCalc.positionSizeCoins * factor) / factor;
-          
+
           // FIX: Límite de seguridad en el tamaño nocional de la posición para evitar rechazos del exchange.
           // BingX tiene límites muy estrictos de tamaño máximo para ciertas monedas en VST.
           let maxNotionalLimit = 50000; // Límite seguro general (50k USD)
           if (symbol === 'PAXG-USDT') maxNotionalLimit = 900; // PAXG tiene un límite de 1000 USDT en VST
-          
+
           if (quantity * entryPrice > maxNotionalLimit) {
             quantity = Math.floor((maxNotionalLimit / entryPrice) * factor) / factor;
             console.log(`[AutoBot] ℹ️ ${symbol}: Tamaño de posición reducido artificialmente al límite máximo nocional de $${maxNotionalLimit}`);

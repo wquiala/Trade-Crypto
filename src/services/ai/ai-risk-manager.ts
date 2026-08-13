@@ -81,15 +81,15 @@ Responde SIEMPRE en JSON exacto:
 - Resumen técnico del sistema: "${request.summary}"
 
 Criterios de VETO ESTRICTOS (evalúa matemáticamente sin inventar datos):
-1. Si ATR% < 0.10% → chop muerto sin volatilidad, VETA.
-2. Si ADX < 20 → mercado lateral o sin fuerza institucional, VETA. (Si ADX >= 20, NO puedes aplicar este veto).
+1. Si ATR% < 0.05% → chop muerto sin volatilidad, VETA.
+2. Si ADX < 15 → mercado lateral o sin fuerza institucional, VETA. (Si ADX >= 15, NO puedes aplicar este veto).
 3. Si señal BUY con RSI > 74 → sobre-compra extrema y agotamiento de tendencia, VETA.
 4. Si señal SELL con RSI < 26 → sobre-venta extrema y agotamiento de tendencia, VETA.
-5. Si hora UTC entre 00-06 Y el ADX es menor a 22 → baja liquidez institucional en madrugada, VETA.
+5. Si hora UTC entre 00-06 Y el ADX es menor a 18 → baja liquidez institucional en madrugada, VETA.
 6. Si ATR% > 3.5% → volatilidad extrema, slippage peligroso, VETA.
 7. Si notas cualquier incoherencia o falta de confluencia en el resumen técnico, VETA.
 
-REGLA DE ORO: Si el ADX es >= 20 y el RSI está en zona saludable (entre 26 y 74), LA TENDENCIA ES VÁLIDA y debes APROBAR (approved: true) con confianza > 75% sin alucinar problemas inexistentes.`;
+REGLA DE ORO: Si el ADX es >= 15 y el RSI está en zona saludable (entre 26 y 74), LA TENDENCIA ES VÁLIDA y debes APROBAR (approved: true) con confianza > 75% sin alucinar problemas inexistentes.`;
 
       const response = await axios.post(
         this.API_URL,
