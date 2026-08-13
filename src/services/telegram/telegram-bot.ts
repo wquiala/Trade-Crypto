@@ -90,7 +90,7 @@ export class TelegramBotService {
         `📅 \`/daily\` - Ver ganancia / pérdida del día de hoy\n` +
         `📊 \`/positions\` - Ver posiciones activas y PnL\n` +
         `📈 \`/signals\` - Ver señal técnica actual y ADX de BTC\n` +
-        `⚡ \`/adx\` - Ver fuerza de tendencia (ADX 15m) en todas las monedas\n` +
+        `⚡ \`/adx\` - Ver fuerza de tendencia (ADX 5m) en todas las monedas\n` +
         `🖥 \`/status\` - Estado de la conexión a BingX`;
       await this.sendMessageToChat(chatId, helpMsg);
     } 
@@ -132,7 +132,7 @@ export class TelegramBotService {
       await this.sendMessageToChat(chatId, msg);
     } 
     else if (command === '/signals') {
-      const klines = await bingxClient.getKlines('BTC-USDT', '15m', 750); // Mismo límite que el loop del bot para consistencia
+      const klines = await bingxClient.getKlines('BTC-USDT', '5m', 750); // Mismo límite que el loop del bot para consistencia
       const analysis = TechnicalAnalysis.analyze('BTC-USDT', klines);
 
       const emojiMap = {
@@ -149,7 +149,7 @@ export class TelegramBotService {
       const adxVal = analysis.adx ? analysis.adx.toFixed(1) : 'N/A';
       const adxEmoji = (analysis.adx || 0) >= minAdxReq ? '📈' : '⚪';
 
-      const msg = `📈 *Análisis Técnico BTC-USDT (15m)*\n\n` +
+      const msg = `📈 *Análisis Técnico BTC-USDT (5m)*\n\n` +
         `• *Precio Actual:* $${analysis.currentPrice}\n` +
         `• *ADX (14):* ${adxEmoji} ${adxVal} (${(analysis.adx || 0) >= minAdxReq ? 'Tendencia Activa' : 'En Rango'}) [Mín: ${minAdxReq}]\n` +
         `• *RSI (14):* ${analysis.rsi}\n` +
@@ -164,10 +164,10 @@ export class TelegramBotService {
       const isWeekend = [0, 6].includes(new Date().getUTCDay());
       const minAdxReq = isWeekend ? 18 : 15;
 
-      let msg = `⚡ *Fuerza de Tendencia ADX (15m)* ${isWeekend ? '(🛡️ Fin de Semana)' : ''}\n\n`;
+      let msg = `⚡ *Fuerza de Tendencia ADX (5m)* ${isWeekend ? '(🛡️ Fin de Semana)' : ''}\n\n`;
       for (const sym of symbols) {
         try {
-          const k = await bingxClient.getKlines(sym, '15m', 750); // 750 velas para EMA200 confiable
+          const k = await bingxClient.getKlines(sym, '5m', 750); // 750 velas para EMA200 confiable
           const a = TechnicalAnalysis.analyze(sym, k);
           const adx = a.adx ? a.adx.toFixed(1) : '0';
           const icon = (a.adx || 0) >= minAdxReq ? '🟢' : '⚪';

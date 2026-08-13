@@ -125,9 +125,9 @@ const persistedState: PersistedState = loadBotState();
 export let botConfig: BotConfig = {
   isAutoBotActive: true,
   monitoredSymbols: ['BTC-USDT', 'ETH-USDT', 'AVAX-USDT', 'LINK-USDT', 'SOL-USDT', 'PAXG-USDT', 'BNB-USDT', 'XRP-USDT', 'DOGE-USDT', 'SUI-USDT'],
-  interval: '15m',
+  interval: '5m', // MICRO-SCALPING: 5m en lugar de 15m para entradas más rápidas
   strategy: 'CONFLUENCE_TA',
-  riskPerTradePercent: 1.0, // Reducido a 1% para cuenta VST (100k) — evita órdenes gigantes rechazadas por BingX. Volver a 3% en cuenta real.
+  riskPerTradePercent: 1.0, 
   maxLeverage: 20,
   // Se restauran desde disco: si el proceso se reinició justo después de un
   // circuit breaker diario, el bot debe arrancar PAUSADO, no reactivarse solo.
@@ -231,41 +231,8 @@ function runBotLoop() {
             botConfig.highestEquityToday = globalBalance.equity;
           }
 
-          // ─── ELIMINADO BLOQUEO DE GANANCIAS (A PETICIÓN DEL USUARIO) ─────────────
-          // El bot ya no cerrará posiciones si detecta fluctuaciones en el equity de la cuenta.
-          // Cada trade se gestiona individualmente por su SL y TP.
-          /*
-          const maxProfitToday = botConfig.highestEquityToday - botConfig.startOfDayEquity;
-          const minProfitToTriggerLock = Math.max(5.0, botConfig.startOfDayEquity * 0.03);
-
           let shouldAlert = false;
           let alertReason = '';
-
-          if (maxProfitToday > minProfitToTriggerLock && botConfig.totalExecutedTrades > 0) {
-            const maxAllowedLossFromPeak = maxProfitToday * 0.4;
-            const lockThreshold = botConfig.highestEquityToday - maxAllowedLossFromPeak;
-            if (globalBalance.equity <= lockThreshold && botConfig.autoTradeEnabled) {
-              shouldAlert = true;
-              alertReason = `🛡️ <b>BLOQUEO DE GANANCIAS</b>\n\nGanancia máxima: +$${escHtml(maxProfitToday.toFixed(2))}\nEquity actual: $${escHtml(globalBalance.equity.toFixed(2))}\nSe aseguró el 60% de las ganancias del día.`;
-            }
-          }
-          */
-
-          let shouldAlert = false;
-          let alertReason = '';
-
-          // ─── ELIMINADO CIERRE DE EMERGENCIA POR DRAWDOWN (4%) ─────────────
-          // A petición del usuario, no se cierran en bloque todas las operaciones al superar
-          // el 4% de pérdida diaria. Cada operación es gobernada por su Stop Loss individual.
-          /*
-          if (!shouldAlert) {
-            const drawdownPct = ((botConfig.startOfDayEquity - globalBalance.equity) / botConfig.startOfDayEquity) * 100;
-            if (drawdownPct >= botConfig.dailyDrawdownLimitPct && botConfig.autoTradeEnabled) {
-              shouldAlert = true;
-              alertReason = `🚨 <b>FRENO DE EMERGENCIA (${escHtml(drawdownPct.toFixed(2))}% drawdown)</b>\n\nSe alcanzó el límite de pérdida diaria.`;
-            }
-          }
-          */
 
           if (shouldAlert) {
             telegramBot.sendMessage(alertReason + '\n⏳ Ejecutando protocolo de cierre de emergencia...');
@@ -300,13 +267,6 @@ function runBotLoop() {
               telegramBot.sendMessage('🚨 <b>FALLO DE RED GRAVE</b>\nNo se pudieron cargar las posiciones para cerrarlas. El exchange no responde.');
             }
 
-            // ─── CIRCUIT BREAKER REAL ───────────────────────────────────────
-            // Antes solo se reseteaba el "pico" de equity y el bot podía volver a
-            // entrar minutos después si aparecía una señal nueva. Ahora, además
-            // de cerrar posiciones, se apaga autoTradeEnabled hasta el siguiente
-            // día de trading. Las posiciones que queden abiertas (si algún cierre
-            // falló arriba) se siguen gestionando con normalidad — solo se
-            // bloquean ENTRADAS nuevas.
             if (botConfig.autoTradeEnabled) {
               botConfig.autoTradeEnabled = false;
               botConfig.autoTradeDisabledByDrawdown = true;
@@ -339,26 +299,16 @@ function runBotLoop() {
       try {
         allActivePositions = await bingxClient.getActivePositions();
       } catch (err: any) {
-        // FIX CRÍTICO: antes, si esta llamada fallaba por un motivo distinto a
-        // ECONNRESET/timeout, el catch solo logueaba el error y el código seguía
-        // adelante con `allActivePositions = []`. Eso hacía que el bot creyera
-        // "no hay posiciones abiertas" cuando en realidad no pudo verificarlo —
-        // con riesgo real de abrir una segunda posición sobre un símbolo que ya
-        // tenía una activa en el exchange. Ahora CUALQUIER fallo aquí aborta el
-        // ciclo completo (se reintenta en 30s con datos frescos).
         console.error('[AutoBot] ⚠️ No se pudieron obtener posiciones activas. Se aborta este ciclo por seguridad (no se abrirán ni gestionarán operaciones con datos inciertos):', err?.message || err);
         return;
       }
-
-      // Bloque 2 solo obtiene la lista de posiciones activas.
-      // La gestión del estado post-cierre es responsabilidad exclusiva del Bloque 4.
 
       // ─────────────────────────────────────────────────────────────────────
       // BLOQUE 3: CICLO POR SÍMBOLO
       // ─────────────────────────────────────────────────────────────────────
       for (const symbol of botConfig.monitoredSymbols) {
         try {
-          const klines = await bingxClient.getKlines(symbol, botConfig.interval, 750); // 750 velas 15m = ~7.8 días. EMA200 tiene 550 velas de warmup (antes: 50)
+          const klines = await bingxClient.getKlines(symbol, botConfig.interval, 750); // 750 velas 5m = ~2.6 días. Suficiente para EMA200
           const closedKlines = klines.slice(0, -1);
           if (closedKlines.length < 50) continue;
 
@@ -412,11 +362,8 @@ function runBotLoop() {
                 botConfig.highestPriceTracker[symbol] = Math.max(botConfig.highestPriceTracker[symbol] || entryPrice, currentPrice);
 
                 // FIX Bug #3 (race condition): Toma parcial PRIMERO, antes del breakeven.
-                // Si ambas condiciones se cumplen en el mismo ciclo de 30s (highestTracker > 3x ATR
-                // implica también > 2.5x ATR), al ejecutar el parcial con await primero, el
-                // modifyStopLoss que viene después llama a getActivePositions() y obtiene
-                // el tamaño correcto (50% restante), no el 100% original.
-                if (!botConfig.partialTaken[symbol] && botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 3.0)) {
+                // TOMA PARCIAL (SCALE-OUT) A +2x ATR — MICRO-SCALPING
+                if (!botConfig.partialTaken[symbol] && botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 2.0)) {
                   botConfig.partialTaken[symbol] = true;
                   const info = getSymbolInfo(symbol);
                   const halfQtyStr = (position.amount / 2).toFixed(info.qtyPrecision);
@@ -437,12 +384,11 @@ function runBotLoop() {
                   }
                 }
 
-                // ESCUDO PROTECTOR DINÁMICO (Breakeven a 2.5x ATR)
-                // Como el parcial ya se ejecutó arriba (await), modifyStopLoss consultará
-                // getActivePositions() con el tamaño correcto (50% si hubo parcial, 100% si no).
+                // ESCUDO PROTECTOR DINÁMICO (Breakeven a 1.2x ATR) - MICRO-SCALPING
+                // Protegemos rápido apenas se mueva a favor.
                 let stopLossFloor = -Infinity;
 
-                if (botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 2.5)) {
+                if (botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 1.2)) {
                   stopLossFloor = entryPrice + (atr * 0.2); // Breakeven con margen mínimo para cubrir comisiones
                   if (!botConfig.breakevenTriggered[symbol]) {
                     botConfig.breakevenTriggered[symbol] = true;
@@ -481,8 +427,8 @@ function runBotLoop() {
                   continue;
                 }
 
-                // TRAILING STOP: retiene 75% de la ganancia máxima (inicia en 4.5x ATR, con TP del exchange ahora en 6x ATR)
-                if (botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 4.5)) {
+                // TRAILING STOP: retiene 75% de la ganancia máxima (inicia en 3.0x ATR) - MICRO-SCALPING
+                if (botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 3.0)) {
                   const maxFavorableMovement = botConfig.highestPriceTracker[symbol] - entryPrice;
                   const triggerPrice = entryPrice + (maxFavorableMovement * 0.75);
 
@@ -514,7 +460,8 @@ function runBotLoop() {
                 botConfig.lowestPriceTracker[symbol] = Math.min(botConfig.lowestPriceTracker[symbol] || entryPrice, currentPrice);
 
                 // FIX Bug #3 (race condition): Toma parcial PRIMERO, antes del breakeven.
-                if (!botConfig.partialTaken[symbol] && botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 3.0)) {
+                // TOMA PARCIAL (SCALE-OUT) A +2x ATR — MICRO-SCALPING
+                if (!botConfig.partialTaken[symbol] && botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 2.0)) {
                   botConfig.partialTaken[symbol] = true;
                   const info = getSymbolInfo(symbol);
                   const halfQtyStr = (position.amount / 2).toFixed(info.qtyPrecision);
@@ -535,10 +482,10 @@ function runBotLoop() {
                   }
                 }
 
-                // ESCUDO PROTECTOR DINÁMICO (Breakeven a 2.5x ATR) — ejecuta DESPUÉS del parcial
+                // ESCUDO PROTECTOR DINÁMICO (Breakeven a 1.2x ATR) — ejecuta DESPUÉS del parcial
                 let stopLossCeiling = Infinity;
 
-                if (botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 2.5)) {
+                if (botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 1.2)) {
                   stopLossCeiling = entryPrice - (atr * 0.2);
                   if (!botConfig.breakevenTriggered[symbol]) {
                     botConfig.breakevenTriggered[symbol] = true;
@@ -577,8 +524,8 @@ function runBotLoop() {
                   continue;
                 }
 
-                // TRAILING STOP SHORT (inicia en 4.5x ATR, con TP del exchange ahora en 6x ATR)
-                if (botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 4.5)) {
+                // TRAILING STOP SHORT (inicia en 3.0x ATR) - MICRO-SCALPING
+                if (botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 3.0)) {
                   const maxFavorableMovement = entryPrice - botConfig.lowestPriceTracker[symbol];
                   const triggerPrice = entryPrice - (maxFavorableMovement * 0.75);
 
@@ -649,38 +596,32 @@ function runBotLoop() {
           // eso es exactamente cuando hay que entrar SHORT.
           if (signal !== 'NEUTRAL') {
             try {
-              const klines1h = await bingxClient.getKlines(symbol, '1h', 500); // 500 velas 1H = ~20 días. EMA200 tiene 300 velas de warmup (antes: 50)
-              if (klines1h && klines1h.length >= 50) {
-                const closes1h = klines1h.map(k => k.close);
-                const ema20_1h = TechnicalAnalysis.calculateEMA(closes1h, 20);
-                const ema50_1h = TechnicalAnalysis.calculateEMA(closes1h, Math.min(50, closes1h.length - 1));
-                // ema200_1h eliminada: reacciona en ~8 dias, ineficaz para scalping 15m. Solo se usan ema20 y ema50.
-                const adx1h = TechnicalAnalysis.calculateADX(klines1h);
-                const current1hPrice = closes1h[closes1h.length - 1];
+              const klines15m = await bingxClient.getKlines(symbol, '15m', 500); // 500 velas 15m = ~5 días.
+              if (klines15m && klines15m.length >= 50) {
+                const closes15m = klines15m.map(k => k.close);
+                const ema20_15m = TechnicalAnalysis.calculateEMA(closes15m, 20);
+                const ema50_15m = TechnicalAnalysis.calculateEMA(closes15m, Math.min(50, closes15m.length - 1));
+                
+                const adx15m = TechnicalAnalysis.calculateADX(klines15m);
+                const current15mPrice = closes15m[closes15m.length - 1];
 
-                // FILTRO 1: Solo bloquear si el TREND de 1H está estructuralmente en contra.
-                // CORRECCIÓN: Antes bloqueaba BUY si precio < EMA20_1H && precio < EMA50_1H.
-                // Esto bloqueaba exactamente los pullbacks saludables (precio temporalmente bajo
-                // EMA20 en 1H = MEJOR momento para comprar en un uptrend). Ahora solo bloquea
-                // si EMA20 ya cruzó por debajo de EMA50 en 1H (downtrend estructural confirmado).
-                // Así los pullbacks sanos NO se bloquean, pero los downtrends reales SÍ.
-                if (signal.includes('BUY') && current1hPrice < ema20_1h && ema20_1h < ema50_1h) {
-                  console.log(`[AutoBot] 🛡️ ${symbol}: BUY bloqueado — Downtrend estructural confirmado en 1H (EMA20 ${ema20_1h.toFixed(2)} < EMA50 ${ema50_1h.toFixed(2)}).`);
+                // FILTRO 1: Solo bloquear si el TREND de 15m está estructuralmente en contra.
+                if (signal.includes('BUY') && current15mPrice < ema20_15m && ema20_15m < ema50_15m) {
+                  console.log(`[AutoBot] 🛡️ ${symbol}: BUY bloqueado — Downtrend estructural confirmado en 15m (EMA20 ${ema20_15m.toFixed(2)} < EMA50 ${ema50_15m.toFixed(2)}).`);
                   signal = 'NEUTRAL';
-                } else if (signal.includes('SELL') && current1hPrice > ema20_1h && ema20_1h > ema50_1h) {
-                  console.log(`[AutoBot] 🛡️ ${symbol}: SELL bloqueado — Uptrend estructural confirmado en 1H (EMA20 ${ema20_1h.toFixed(2)} > EMA50 ${ema50_1h.toFixed(2)}).`);
+                } else if (signal.includes('SELL') && current15mPrice > ema20_15m && ema20_15m > ema50_15m) {
+                  console.log(`[AutoBot] 🛡️ ${symbol}: SELL bloqueado — Uptrend estructural confirmado en 15m (EMA20 ${ema20_15m.toFixed(2)} > EMA50 ${ema50_15m.toFixed(2)}).`);
                   signal = 'NEUTRAL';
                 }
 
-                // FILTRO 2: Bloquear en chop lateral de 1H (ADX < 15)
-                // Umbral bajado de 18→15: no queremos filtrar demasiado, solo el chop más extremo.
-                if (signal !== 'NEUTRAL' && adx1h > 0 && adx1h < 15) {
-                  console.log(`[AutoBot] 🛡️ ${symbol}: ${signal} bloqueado — ADX de 1H muy débil (${adx1h} < 15). Mercado en chop puro.`);
+                // FILTRO 2: Bloquear en chop lateral de 15m (ADX < 15)
+                if (signal !== 'NEUTRAL' && adx15m > 0 && adx15m < 15) {
+                  console.log(`[AutoBot] 🛡️ ${symbol}: ${signal} bloqueado — ADX de 15m muy débil (${adx15m} < 15). Mercado en chop puro.`);
                   signal = 'NEUTRAL';
                 }
               }
-            } catch (err1h) {
-              console.warn(`[AutoBot] ⚠️ No se pudo verificar tendencia de 1H para ${symbol}, evaluando solo 15m.`);
+            } catch (err15m) {
+              console.warn(`[AutoBot] ⚠️ No se pudo verificar tendencia de 15m para ${symbol}, evaluando solo 5m.`);
             }
           }
 
@@ -752,28 +693,17 @@ function runBotLoop() {
             continue;
           }
 
-          // FIX: antes `lastSignals[symbol] = signal` se marcaba aquí, inmediatamente
-          // tras la aprobación de la IA — pero si el `placeOrder` de más abajo fallaba
-          // (rechazo del exchange, corte de red, etc.), la señal ya quedaba marcada como
-          // "procesada" y el bot la ignoraba en todos los ciclos futuros hasta que
-          // apareciera una señal distinta, sin reintentar y sin avisar por Telegram.
-          // Ahora NO se toca `lastSignals` aquí; se marca únicamente dentro del bloque
-          // `if (orderRes.success)`, más abajo, junto con `forbiddenSide`.
-
           const balance = await bingxClient.getAccountBalance();
           const entryPrice = analysis.currentPrice;
           const info = getSymbolInfo(symbol);
 
-          // SL dinámico a 2.5x ATR (sin el mínimo irreal del 1.8% que dejaba el TP inalcanzable)
-          // Se usa un mínimo de 0.4% solo para evitar stops microscópicos en criptos muy paradas
-          const atrDistance = analysis.atr > 0 ? Math.max(entryPrice * 0.004, analysis.atr * 2.5) : entryPrice * 0.005;
+          // SL dinámico a 1.2x ATR (Micro-Scalping)
+          // Se usa un mínimo de 0.2% (bajado del 0.4%) para permitir stops más ceñidos
+          const atrDistance = analysis.atr > 0 ? Math.max(entryPrice * 0.002, analysis.atr * 1.2) : entryPrice * 0.003;
           const stopLoss = posSide === 'LONG' ? entryPrice - atrDistance : entryPrice + atrDistance;
-          // FIX Bug #2: TP subido a 6x ATR (atrDistance * 2.4) para dejar espacio entre:
-          // - Toma parcial:  3.0x ATR  (lock temprano de ganancias)
-          // - Trailing stop: 4.5x ATR  (lock de la mayoría de la ganancia)
-          // - TP exchange:   6.0x ATR  (objetivo máximo — ya no compite con el trailing)
-          // RR resultante: SL a 2.5x ATR vs TP a 6x ATR = ratio 1:2.4
-          const takeProfit = posSide === 'LONG' ? entryPrice + (atrDistance * 2.4) : entryPrice - (atrDistance * 2.4);
+          // TP subido a 4.5x ATR (que equivale a atrDistance * 3.75 ya que atrDistance es 1.2x ATR)
+          // RR resultante: SL a 1.2x ATR vs TP a 4.5x ATR = ratio 1:3.75
+          const takeProfit = posSide === 'LONG' ? entryPrice + (atrDistance * 3.75) : entryPrice - (atrDistance * 3.75);
 
           const riskCalc = RiskCalculator.calculate({
             accountBalance: balance.available > 0 ? balance.available : 10,
@@ -979,7 +909,7 @@ function runBotLoop() {
       isLoopRunning = false;
     }
 
-  }, 30000);
+  }, 15000); // 15 segundos para el loop (Micro-Scalping)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
