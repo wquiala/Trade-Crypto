@@ -349,7 +349,7 @@ function runBotLoop() {
                   delete botConfig.highestPriceTracker[symbol];
                   delete botConfig.lowestPriceTracker[symbol];
                   botConfig.partialTaken[symbol] = false;
-                  botConfig.cooldownUntil[symbol] = Date.now() + 15 * 60 * 1000; // MICRO-SCALPING: 15 min de cooldown (3 velas)
+                  botConfig.cooldownUntil[symbol] = Date.now() + 3 * 60 * 1000; // MICRO-SCALPING: 15 min de cooldown (3 velas)
                   botConfig.lastTradeTime[symbol] = 0;
                   persistState();
                   continue;
@@ -421,7 +421,7 @@ function runBotLoop() {
                   delete botConfig.tradeOpenTime[symbol];
                   delete botConfig.highestPriceTracker[symbol];
                   botConfig.partialTaken[symbol] = false;
-                  botConfig.cooldownUntil[symbol] = Date.now() + 15 * 60 * 1000; // MICRO-SCALPING: 15 min de cooldown
+                  botConfig.cooldownUntil[symbol] = Date.now() + 3 * 60 * 1000; // MICRO-SCALPING: 15 min de cooldown
                   botConfig.lastTradeTime[symbol] = 0;
                   persistState();
                   continue;
@@ -448,7 +448,7 @@ function runBotLoop() {
                     delete botConfig.tradeOpenTime[symbol];
                     delete botConfig.highestPriceTracker[symbol];
                     botConfig.partialTaken[symbol] = false;
-                    botConfig.cooldownUntil[symbol] = Date.now() + 10 * 60 * 1000; // MICRO-SCALPING: 10 min de cooldown tras trailing stop
+                    botConfig.cooldownUntil[symbol] = Date.now() + 3 * 60 * 1000; // MICRO-SCALPING: 10 min de cooldown tras trailing stop
                     botConfig.lastTradeTime[symbol] = 0;
                     persistState();
                     continue;
@@ -518,7 +518,7 @@ function runBotLoop() {
                   delete botConfig.tradeOpenTime[symbol];
                   delete botConfig.lowestPriceTracker[symbol];
                   botConfig.partialTaken[symbol] = false;
-                  botConfig.cooldownUntil[symbol] = Date.now() + 15 * 60 * 1000; // MICRO-SCALPING: 15 min de cooldown
+                  botConfig.cooldownUntil[symbol] = Date.now() + 3 * 60 * 1000; // MICRO-SCALPING: 15 min de cooldown
                   botConfig.lastTradeTime[symbol] = 0;
                   persistState();
                   continue;
@@ -545,7 +545,7 @@ function runBotLoop() {
                     delete botConfig.tradeOpenTime[symbol];
                     delete botConfig.lowestPriceTracker[symbol];
                     botConfig.partialTaken[symbol] = false;
-                    botConfig.cooldownUntil[symbol] = Date.now() + 10 * 60 * 1000; // MICRO-SCALPING: 10 min de cooldown tras trailing stop
+                    botConfig.cooldownUntil[symbol] = Date.now() + 3 * 60 * 1000; // MICRO-SCALPING: 10 min de cooldown tras trailing stop
                     botConfig.lastTradeTime[symbol] = 0;
                     persistState();
                     continue;
@@ -579,7 +579,7 @@ function runBotLoop() {
           // En ese caso NO aplicamos la hora extra porque la penalización ya se cumplió.
           // Si NO había cooldownUntil, aplicamos 15m de cooldown (típico cierre por SL/TP externo).
           const hadEarlyExitCooldown = (botConfig.cooldownUntil[symbol] || 0) > 0;
-          const lastTradeCooldownMs = hadEarlyExitCooldown ? 0 : 15 * 60 * 1000;
+          const lastTradeCooldownMs = hadEarlyExitCooldown ? 0 : 3 * 60 * 1000;
           if (Date.now() - lastTrade < lastTradeCooldownMs) continue;
 
           let signal = analysis.signal;
@@ -672,7 +672,7 @@ function runBotLoop() {
           const aiValidation = { approved: true, confidence: 100, reason: 'IA DESACTIVADA (Micro-Scalping)' };
           
           if (!aiValidation.approved) {
-            botConfig.cooldownUntil[symbol] = Date.now() + 15 * 60 * 1000;
+            botConfig.cooldownUntil[symbol] = Date.now() + 3 * 60 * 1000;
             continue;
           }
 
@@ -705,7 +705,7 @@ function runBotLoop() {
           // reactivo, no preventivo. Ahora se frena aquí, antes de intentar nada.
           if (!riskCalc.isRiskAcceptable) {
             console.warn(`[AutoBot] ⚠️ ${symbol}: riesgo no aceptable. Margen requerido $${riskCalc.marginRequiredUSDT} > disponible $${(balance.available > 0 ? balance.available : 10).toFixed(2)}. Entrada omitida.`);
-            botConfig.cooldownUntil[symbol] = Date.now() + 15 * 60 * 1000;
+            botConfig.cooldownUntil[symbol] = Date.now() + 3 * 60 * 1000;
             continue;
           }
 
@@ -803,7 +803,7 @@ function runBotLoop() {
             // avisa por Telegram para que no pase desapercibido.
             console.error(`[AutoBot] ❌ Orden rechazada por el exchange en ${symbol}:`, orderRes.message);
             telegramBot.sendMessage(`⚠️ <b>ORDEN RECHAZADA</b>\n\n• Par: ${escHtml(symbol)}\n• Señal: ${escHtml(signal)}\n• Motivo: ${escHtml(orderRes.message)}\n• Se reintentará tras un breve cooldown.`);
-            botConfig.cooldownUntil[symbol] = Date.now() + 5 * 60 * 1000;
+            botConfig.cooldownUntil[symbol] = Date.now() + 3 * 60 * 1000;
           }
 
         } catch (err: any) {
@@ -863,7 +863,7 @@ function runBotLoop() {
                   botConfig.forbiddenSide[symbol] = closedSide;
                 }
               }
-              botConfig.cooldownUntil[symbol] = Date.now() + 15 * 60 * 1000;
+              botConfig.cooldownUntil[symbol] = Date.now() + 1 * 60 * 1000; // ULTRA MICRO-SCALPING: 1 min de cooldown si se cierra a mano
             }
 
             // Limpieza completa del estado post-cierre
