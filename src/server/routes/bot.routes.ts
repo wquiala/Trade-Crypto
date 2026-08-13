@@ -585,8 +585,9 @@ function runBotLoop() {
           let signal = analysis.signal;
           // Buffer reducido al 0.1% sobre EMA200: evita entradas exactamente en la barrera pero permite
           // breakouts legítimos que ocurren justo al cruzar la EMA200 (los mejores puntos de entrada).
-          if (signal.includes('BUY') && analysis.currentPrice < analysis.ema200 * 1.001) signal = 'NEUTRAL';
-          else if (signal.includes('SELL') && analysis.currentPrice > analysis.ema200 * 0.999) signal = 'NEUTRAL';
+          // ULTRA MICRO-SCALPING: Filtro EMA200 desactivado (permite operar contra-tendencia en pullbacks rápidos)
+          // if (signal.includes('BUY') && analysis.currentPrice < analysis.ema200 * 1.001) signal = 'NEUTRAL';
+          // else if (signal.includes('SELL') && analysis.currentPrice > analysis.ema200 * 0.999) signal = 'NEUTRAL';
 
           // ─── FILTRO INSTITUCIONAL MULTI-TIMEFRAME (1 HORA) ────────────────
           // Regla: solo bloquear si el mercado en 1H tiene una tendencia OPUESTA
@@ -606,19 +607,21 @@ function runBotLoop() {
                 const current15mPrice = closes15m[closes15m.length - 1];
 
                 // FILTRO 1: Solo bloquear si el TREND de 15m está estructuralmente en contra.
-                if (signal.includes('BUY') && current15mPrice < ema20_15m && ema20_15m < ema50_15m) {
-                  console.log(`[AutoBot] 🛡️ ${symbol}: BUY bloqueado — Downtrend estructural confirmado en 15m (EMA20 ${ema20_15m.toFixed(2)} < EMA50 ${ema50_15m.toFixed(2)}).`);
-                  signal = 'NEUTRAL';
-                } else if (signal.includes('SELL') && current15mPrice > ema20_15m && ema20_15m > ema50_15m) {
-                  console.log(`[AutoBot] 🛡️ ${symbol}: SELL bloqueado — Uptrend estructural confirmado en 15m (EMA20 ${ema20_15m.toFixed(2)} > EMA50 ${ema50_15m.toFixed(2)}).`);
-                  signal = 'NEUTRAL';
-                }
+                // ULTRA MICRO-SCALPING: Filtro 15m desactivado (opera puramente en 5m, ignorando macro-estructura)
+                // if (signal.includes('BUY') && current15mPrice < ema20_15m && ema20_15m < ema50_15m) {
+                //   console.log(`[AutoBot] 🛡️ ${symbol}: BUY bloqueado — Downtrend estructural confirmado en 15m (EMA20 ${ema20_15m.toFixed(2)} < EMA50 ${ema50_15m.toFixed(2)}).`);
+                //   signal = 'NEUTRAL';
+                // } else if (signal.includes('SELL') && current15mPrice > ema20_15m && ema20_15m > ema50_15m) {
+                //   console.log(`[AutoBot] 🛡️ ${symbol}: SELL bloqueado — Uptrend estructural confirmado en 15m (EMA20 ${ema20_15m.toFixed(2)} > EMA50 ${ema50_15m.toFixed(2)}).`);
+                //   signal = 'NEUTRAL';
+                // }
 
                 // FILTRO 2: Bloquear en chop lateral de 15m (ADX < 15)
-                if (signal !== 'NEUTRAL' && adx15m > 0 && adx15m < 15) {
-                  console.log(`[AutoBot] 🛡️ ${symbol}: ${signal} bloqueado — ADX de 15m muy débil (${adx15m} < 15). Mercado en chop puro.`);
-                  signal = 'NEUTRAL';
-                }
+                // ULTRA MICRO-SCALPING: Filtro ADX 15m desactivado
+                // if (signal !== 'NEUTRAL' && adx15m > 0 && adx15m < 15) {
+                //   console.log(`[AutoBot] 🛡️ ${symbol}: ${signal} bloqueado — ADX de 15m muy débil (${adx15m} < 15). Mercado en chop puro.`);
+                //   signal = 'NEUTRAL';
+                // }
               }
             } catch (err15m) {
               console.warn(`[AutoBot] ⚠️ No se pudo verificar tendencia de 15m para ${symbol}, evaluando solo 5m.`);
@@ -697,16 +700,16 @@ function runBotLoop() {
             positionSide: posSide,
           });
 
-          // FIX: `riskCalc.isRiskAcceptable` se calculaba pero nunca se comprobaba.
-          // Indica que el margen requerido para respetar el % de riesgo configurado
-          // supera el balance disponible (típico cuando el SL queda muy cerca del
-          // precio de entrada por baja volatilidad). Antes, el bot mandaba la orden
-          // igual y dependía de que BingX la rechazara por margen insuficiente —
-          // reactivo, no preventivo. Ahora se frena aquí, antes de intentar nada.
+          // ULTRA MICRO-SCALPING: Si el Stop Loss es tan pequeño que exige un margen gigante,
+          // en lugar de cancelar la operación, simplemente limitamos el tamaño de la posición
+          // al margen máximo disponible.
           if (!riskCalc.isRiskAcceptable) {
-            console.warn(`[AutoBot] ⚠️ ${symbol}: riesgo no aceptable. Margen requerido $${riskCalc.marginRequiredUSDT} > disponible $${(balance.available > 0 ? balance.available : 10).toFixed(2)}. Entrada omitida.`);
-            botConfig.cooldownUntil[symbol] = Date.now() + 3 * 60 * 1000;
-            continue;
+            console.log(`[AutoBot] ⚠️ ${symbol}: Margen requerido ($${riskCalc.marginRequiredUSDT.toFixed(2)}) supera el disponible ($${balance.available.toFixed(2)}). Ajustando posición al máximo posible.`);
+            const maxAllowedMargin = balance.available > 0 ? balance.available * 0.95 : 10; // Usar max 95% del balance
+            const adjustedPositionValue = maxAllowedMargin * botConfig.maxLeverage;
+            riskCalc.positionSizeCoins = adjustedPositionValue / entryPrice;
+            riskCalc.marginRequiredUSDT = maxAllowedMargin;
+            riskCalc.isRiskAcceptable = true;
           }
 
           const factor = Math.pow(10, info.qtyPrecision);
