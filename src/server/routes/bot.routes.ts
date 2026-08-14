@@ -362,8 +362,8 @@ function runBotLoop() {
                 botConfig.highestPriceTracker[symbol] = Math.max(botConfig.highestPriceTracker[symbol] || entryPrice, currentPrice);
 
                 // FIX Bug #3 (race condition): Toma parcial PRIMERO, antes del breakeven.
-                // TOMA PARCIAL (SCALE-OUT) A +1.2x ATR — GANANCIAS RÁPIDAS
-                if (!botConfig.partialTaken[symbol] && botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 1.2)) {
+                // TOMA PARCIAL (SCALE-OUT) A +0.6x ATR — MICRO GANANCIAS SÚPER RÁPIDAS
+                if (!botConfig.partialTaken[symbol] && botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 0.6)) {
                   botConfig.partialTaken[symbol] = true;
                   const info = getSymbolInfo(symbol);
                   const halfQtyStr = (position.amount / 2).toFixed(info.qtyPrecision);
@@ -384,12 +384,13 @@ function runBotLoop() {
                   }
                 }
 
-                // ESCUDO PROTECTOR DINÁMICO (Breakeven a 0.8x ATR)
+                // ESCUDO PROTECTOR DINÁMICO (Breakeven a 0.4x ATR)
                 // Protegemos rapidísimo apenas estemos en verde.
-                let stopLossFloor = -Infinity;
+                // FIX CRÍTICO: Si BingX falla al colocar el SL, el bot DEBE tener un SL por software en 1.0x ATR
+                let stopLossFloor = entryPrice - (atr * 1.0);
 
-                if (botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 0.8)) {
-                  stopLossFloor = entryPrice + (atr * 0.2); // Breakeven con margen mínimo para cubrir comisiones
+                if (botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 0.4)) {
+                  stopLossFloor = entryPrice + (atr * 0.1); // Breakeven con margen mínimo para cubrir comisiones
                   if (!botConfig.breakevenTriggered[symbol]) {
                     botConfig.breakevenTriggered[symbol] = true;
                     const bePriceLong = parseFloat((entryPrice + (atr * 0.2)).toFixed(posInfo.pricePrecision));
@@ -427,8 +428,8 @@ function runBotLoop() {
                   continue;
                 }
 
-                // TRAILING STOP: retiene 75% de la ganancia máxima (inicia en 2.0x ATR)
-                if (botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 2.0)) {
+                // TRAILING STOP: retiene 75% de la ganancia máxima (inicia en 1.0x ATR)
+                if (botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 1.0)) {
                   const maxFavorableMovement = botConfig.highestPriceTracker[symbol] - entryPrice;
                   const triggerPrice = entryPrice + (maxFavorableMovement * 0.75);
 
@@ -460,8 +461,8 @@ function runBotLoop() {
                 botConfig.lowestPriceTracker[symbol] = Math.min(botConfig.lowestPriceTracker[symbol] || entryPrice, currentPrice);
 
                 // FIX Bug #3 (race condition): Toma parcial PRIMERO, antes del breakeven.
-                // TOMA PARCIAL (SCALE-OUT) A +1.2x ATR — GANANCIAS RÁPIDAS
-                if (!botConfig.partialTaken[symbol] && botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 1.2)) {
+                // TOMA PARCIAL (SCALE-OUT) A +0.6x ATR — MICRO GANANCIAS SÚPER RÁPIDAS
+                if (!botConfig.partialTaken[symbol] && botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 0.6)) {
                   botConfig.partialTaken[symbol] = true;
                   const info = getSymbolInfo(symbol);
                   const halfQtyStr = (position.amount / 2).toFixed(info.qtyPrecision);
@@ -482,11 +483,12 @@ function runBotLoop() {
                   }
                 }
 
-                // ESCUDO PROTECTOR DINÁMICO (Breakeven a 0.8x ATR)
-                let stopLossCeiling = Infinity;
+                // ESCUDO PROTECTOR DINÁMICO (Breakeven a 0.4x ATR)
+                // FIX CRÍTICO: Si BingX falla al colocar el SL, el bot DEBE tener un SL por software en 1.0x ATR
+                let stopLossCeiling = entryPrice + (atr * 1.0);
 
-                if (botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 0.8)) {
-                  stopLossCeiling = entryPrice - (atr * 0.2);
+                if (botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 0.4)) {
+                  stopLossCeiling = entryPrice - (atr * 0.1);
                   if (!botConfig.breakevenTriggered[symbol]) {
                     botConfig.breakevenTriggered[symbol] = true;
                     const bePriceShort = parseFloat((entryPrice - (atr * 0.2)).toFixed(posInfo.pricePrecision));
@@ -524,8 +526,8 @@ function runBotLoop() {
                   continue;
                 }
 
-                // TRAILING STOP SHORT (inicia en 2.0x ATR)
-                if (botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 2.0)) {
+                // TRAILING STOP SHORT (inicia en 1.0x ATR)
+                if (botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 1.0)) {
                   const maxFavorableMovement = entryPrice - botConfig.lowestPriceTracker[symbol];
                   const triggerPrice = entryPrice - (maxFavorableMovement * 0.75);
 
@@ -687,8 +689,8 @@ function runBotLoop() {
           const atrDistance = analysis.atr > 0 ? Math.max(entryPrice * 0.002, analysis.atr * 1.0) : entryPrice * 0.003;
           const stopLoss = posSide === 'LONG' ? entryPrice - atrDistance : entryPrice + atrDistance;
           
-          // TP exchange a 3.0x ATR
-          const takeProfit = posSide === 'LONG' ? entryPrice + (atrDistance * 3.0) : entryPrice - (atrDistance * 3.0);
+          // TP exchange a 1.5x ATR (Micro ganancias rápidas)
+          const takeProfit = posSide === 'LONG' ? entryPrice + (atrDistance * 1.5) : entryPrice - (atrDistance * 1.5);
 
           const riskCalc = RiskCalculator.calculate({
             accountBalance: balance.available > 0 ? balance.available : 10,
