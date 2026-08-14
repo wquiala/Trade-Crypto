@@ -302,7 +302,7 @@ export class TechnicalAnalysis {
     // En fin de semana la barra es más alta por menor liquidez institucional.
     // ─────────────────────────────────────────────────────────────────────────
     const isWeekend = [0, 6].includes(new Date().getUTCDay());
-    const minAtrPercent = isWeekend ? 0.15 : 0.05; // Reducido para no filtrar demasiado
+    const minAtrPercent = 0.02; // Súper reducido para micro-scalping extremo
     const atrPercent = currentPrice > 0 ? (atr / currentPrice) * 100 : 0;
 
     if (atrPercent > 0 && atrPercent < minAtrPercent) {
@@ -317,7 +317,7 @@ export class TechnicalAnalysis {
     // FILTRO 2: ADX — Confirmar que hay tendencia real (no chop lateral)
     // ADX < 15: mercado en rango/lateral → NEUTRAL obligatorio
     // ─────────────────────────────────────────────────────────────────────────
-    const MIN_ADX = isWeekend ? 18 : 15;
+    const MIN_ADX = 5; // Ultra bajo para permitir operar en casi cualquier condición (micro-scalping)
     if (adx > 0 && adx < MIN_ADX) {
       return {
         symbol, currentPrice, rsi, ema20, ema50, ema200, macd, bollinger, atr, volumeSMA, adx,
@@ -406,8 +406,8 @@ export class TechnicalAnalysis {
       if (isMacroBearish && sellScore > buyScore) sellScore += 0.5;
     }
 
-    const canBuyRsi = rsi >= 30 && rsi < 68;   // Estrictamente < 68 para no solapar con zona SELL
-    const canSellRsi = rsi >= 32 && rsi <= 70;
+    const canBuyRsi = true; // Desactivado para ultra micro-scalping (antes limitaba RSI < 68)
+    const canSellRsi = true; // Desactivado para ultra micro-scalping (antes limitaba RSI > 32)
 
     // ─────────────────────────────────────────────────────────────────────────
     // VETO ANTI-TREN (Solo cuando hay tendencia MUY fuerte confirmada por ADX)
