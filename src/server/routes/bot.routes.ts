@@ -386,8 +386,8 @@ function runBotLoop() {
 
                 // ESCUDO PROTECTOR DINÁMICO (Breakeven a 0.4x ATR)
                 // Protegemos rapidísimo apenas estemos en verde.
-                // FIX CRÍTICO: Si BingX falla al colocar el SL, el bot DEBE tener un SL por software en 1.0x ATR
-                let stopLossFloor = entryPrice - (atr * 1.0);
+                // FIX CRÍTICO: Si BingX falla al colocar el SL, el bot DEBE tener un SL por software en 4.0x ATR
+                let stopLossFloor = entryPrice - (atr * 4.0);
 
                 if (botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 0.4)) {
                   stopLossFloor = entryPrice + (atr * 0.1); // Breakeven con margen mínimo para cubrir comisiones
@@ -484,8 +484,8 @@ function runBotLoop() {
                 }
 
                 // ESCUDO PROTECTOR DINÁMICO (Breakeven a 0.4x ATR)
-                // FIX CRÍTICO: Si BingX falla al colocar el SL, el bot DEBE tener un SL por software en 1.0x ATR
-                let stopLossCeiling = entryPrice + (atr * 1.0);
+                // FIX CRÍTICO: Si BingX falla al colocar el SL, el bot DEBE tener un SL por software en 4.0x ATR
+                let stopLossCeiling = entryPrice + (atr * 4.0);
 
                 if (botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 0.4)) {
                   stopLossCeiling = entryPrice - (atr * 0.1);
@@ -685,9 +685,11 @@ function runBotLoop() {
           const entryPrice = analysis.currentPrice;
           const info = getSymbolInfo(symbol);
 
-          // SL dinámico a 1.0x ATR (Ultra Micro-Scalping)
+          // Base ATR (1.0x) para calcular distancias relativas
           const atrDistance = analysis.atr > 0 ? Math.max(entryPrice * 0.002, analysis.atr * 1.0) : entryPrice * 0.003;
-          const stopLoss = posSide === 'LONG' ? entryPrice - atrDistance : entryPrice + atrDistance;
+          
+          // SL dinámico a 4.0x ATR (Mucho más oxígeno para la operación)
+          const stopLoss = posSide === 'LONG' ? entryPrice - (atrDistance * 4.0) : entryPrice + (atrDistance * 4.0);
           
           // TP exchange a 1.5x ATR (Micro ganancias rápidas)
           const takeProfit = posSide === 'LONG' ? entryPrice + (atrDistance * 1.5) : entryPrice - (atrDistance * 1.5);
