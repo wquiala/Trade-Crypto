@@ -5,11 +5,12 @@ import { TechnicalAnalysis } from './src/services/analytics/indicators';
 
 async function test() {
   const client = new BingXClient();
-  const symbol = 'BTC-USDT';
-  console.log(`\nAnalyzing ${symbol}...`);
-  const klines = await client.getKlines(symbol, '5m', 200);
-  const analysis = TechnicalAnalysis.analyze(symbol, klines);
-  console.log(`Signal for ${symbol}: ${analysis.signal}`);
-  console.log(`Summary: ${analysis.summary}`);
+  const symbols = ['BTC-USDT', 'ETH-USDT', 'SOL-USDT', 'LINK-USDT', 'AVAX-USDT'];
+  for (const symbol of symbols) {
+    const klines = await client.getKlines(symbol, '5m', 200);
+    const analysis = TechnicalAnalysis.analyze(symbol, klines);
+    const inverted = analysis.signal.includes('BUY') ? 'SHORT (SELL)' : (analysis.signal.includes('SELL') ? 'LONG (BUY)' : 'NEUTRAL');
+    console.log(`[${symbol}] Señal Técnica: ${analysis.signal} -> Ejecutaría Inverso: ${inverted}`);
+  }
 }
 test().catch(console.error);

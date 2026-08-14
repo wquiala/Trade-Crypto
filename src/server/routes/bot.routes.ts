@@ -349,7 +349,7 @@ function runBotLoop() {
                   delete botConfig.highestPriceTracker[symbol];
                   delete botConfig.lowestPriceTracker[symbol];
                   botConfig.partialTaken[symbol] = false;
-                  botConfig.cooldownUntil[symbol] = Date.now() + 3 * 60 * 1000; // MICRO-SCALPING: 15 min de cooldown (3 velas)
+                  botConfig.cooldownUntil[symbol] = Date.now() + 15 * 60 * 1000; // 15 min de cooldown
                   botConfig.lastTradeTime[symbol] = 0;
                   persistState();
                   continue;
@@ -362,8 +362,8 @@ function runBotLoop() {
                 botConfig.highestPriceTracker[symbol] = Math.max(botConfig.highestPriceTracker[symbol] || entryPrice, currentPrice);
 
                 // FIX Bug #3 (race condition): Toma parcial PRIMERO, antes del breakeven.
-                // TOMA PARCIAL (SCALE-OUT) A +0.6x ATR — MICRO GANANCIAS SÚPER RÁPIDAS
-                if (!botConfig.partialTaken[symbol] && botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 0.6)) {
+                // TOMA PARCIAL (SCALE-OUT) A +1.2x ATR
+                if (!botConfig.partialTaken[symbol] && botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 1.2)) {
                   botConfig.partialTaken[symbol] = true;
                   const info = getSymbolInfo(symbol);
                   const halfQtyStr = (position.amount / 2).toFixed(info.qtyPrecision);
@@ -374,7 +374,7 @@ function runBotLoop() {
                     console.log(`[AutoBot] 💰 Toma Parcial (50%) en ${symbol} LONG @ $${currentPrice}`);
                     const closeRes = await bingxClient.closePosition(symbol, 'LONG', halfQty);
                     if (closeRes.success) {
-                      telegramBot.sendMessage(`💰 <b>TOMA PARCIAL (50%)</b>\n\n• Par: ${escHtml(symbol)}\n• Se cerraron ${halfQty} LONG a +3x ATR.`);
+                      telegramBot.sendMessage(`💰 <b>TOMA PARCIAL (50%)</b>\n\n• Par: ${escHtml(symbol)}\n• Se cerraron ${halfQty} LONG a +1.2x ATR.`);
                       position.amount -= halfQty; // Ajustar volumen localmente para el resto de comprobaciones
                     } else {
                       console.error(`[AutoBot] ⚠️ Error en Toma Parcial LONG para ${symbol}:`, closeRes.message);
@@ -384,13 +384,12 @@ function runBotLoop() {
                   }
                 }
 
-                // ESCUDO PROTECTOR DINÁMICO (Breakeven a 0.4x ATR)
-                // Protegemos rapidísimo apenas estemos en verde.
-                // FIX CRÍTICO: Si BingX falla al colocar el SL, el bot DEBE tener un SL por software en 4.0x ATR
-                let stopLossFloor = entryPrice - (atr * 4.0);
+                // ESCUDO PROTECTOR DINÁMICO (Breakeven a 0.8x ATR)
+                // Protegemos apenas estemos en verde suficiente.
+                let stopLossFloor = entryPrice - (atr * 1.5);
 
-                if (botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 0.4)) {
-                  stopLossFloor = entryPrice + (atr * 0.1); // Breakeven con margen mínimo para cubrir comisiones
+                if (botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 0.8)) {
+                  stopLossFloor = entryPrice + (atr * 0.2); // Breakeven con margen mínimo para cubrir comisiones
                   if (!botConfig.breakevenTriggered[symbol]) {
                     botConfig.breakevenTriggered[symbol] = true;
                     const bePriceLong = parseFloat((entryPrice + (atr * 0.2)).toFixed(posInfo.pricePrecision));
@@ -422,14 +421,14 @@ function runBotLoop() {
                   delete botConfig.tradeOpenTime[symbol];
                   delete botConfig.highestPriceTracker[symbol];
                   botConfig.partialTaken[symbol] = false;
-                  botConfig.cooldownUntil[symbol] = Date.now() + 3 * 60 * 1000; // MICRO-SCALPING: 15 min de cooldown
+                  botConfig.cooldownUntil[symbol] = Date.now() + 15 * 60 * 1000; // 15 min de cooldown
                   botConfig.lastTradeTime[symbol] = 0;
                   persistState();
                   continue;
                 }
 
-                // TRAILING STOP: retiene 75% de la ganancia máxima (inicia en 1.0x ATR)
-                if (botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 1.0)) {
+                // TRAILING STOP: retiene 75% de la ganancia máxima (inicia en 2.0x ATR)
+                if (botConfig.highestPriceTracker[symbol] > entryPrice + (atr * 2.0)) {
                   const maxFavorableMovement = botConfig.highestPriceTracker[symbol] - entryPrice;
                   const triggerPrice = entryPrice + (maxFavorableMovement * 0.75);
 
@@ -449,7 +448,7 @@ function runBotLoop() {
                     delete botConfig.tradeOpenTime[symbol];
                     delete botConfig.highestPriceTracker[symbol];
                     botConfig.partialTaken[symbol] = false;
-                    botConfig.cooldownUntil[symbol] = Date.now() + 3 * 60 * 1000; // MICRO-SCALPING: 10 min de cooldown tras trailing stop
+                    botConfig.cooldownUntil[symbol] = Date.now() + 15 * 60 * 1000;
                     botConfig.lastTradeTime[symbol] = 0;
                     persistState();
                     continue;
@@ -461,8 +460,8 @@ function runBotLoop() {
                 botConfig.lowestPriceTracker[symbol] = Math.min(botConfig.lowestPriceTracker[symbol] || entryPrice, currentPrice);
 
                 // FIX Bug #3 (race condition): Toma parcial PRIMERO, antes del breakeven.
-                // TOMA PARCIAL (SCALE-OUT) A +0.6x ATR — MICRO GANANCIAS SÚPER RÁPIDAS
-                if (!botConfig.partialTaken[symbol] && botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 0.6)) {
+                // TOMA PARCIAL (SCALE-OUT) A +1.2x ATR
+                if (!botConfig.partialTaken[symbol] && botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 1.2)) {
                   botConfig.partialTaken[symbol] = true;
                   const info = getSymbolInfo(symbol);
                   const halfQtyStr = (position.amount / 2).toFixed(info.qtyPrecision);
@@ -473,7 +472,7 @@ function runBotLoop() {
                     console.log(`[AutoBot] 💰 Toma Parcial (50%) en ${symbol} SHORT @ $${currentPrice}`);
                     const closeRes = await bingxClient.closePosition(symbol, 'SHORT', halfQty);
                     if (closeRes.success) {
-                      telegramBot.sendMessage(`💰 <b>TOMA PARCIAL (50%)</b>\n\n• Par: ${escHtml(symbol)}\n• Se cerraron ${halfQty} SHORT a +3x ATR.`);
+                      telegramBot.sendMessage(`💰 <b>TOMA PARCIAL (50%)</b>\n\n• Par: ${escHtml(symbol)}\n• Se cerraron ${halfQty} SHORT a +1.2x ATR.`);
                       position.amount -= halfQty;
                     } else {
                       console.error(`[AutoBot] ⚠️ Error en Toma Parcial SHORT para ${symbol}:`, closeRes.message);
@@ -483,12 +482,11 @@ function runBotLoop() {
                   }
                 }
 
-                // ESCUDO PROTECTOR DINÁMICO (Breakeven a 0.4x ATR)
-                // FIX CRÍTICO: Si BingX falla al colocar el SL, el bot DEBE tener un SL por software en 4.0x ATR
-                let stopLossCeiling = entryPrice + (atr * 4.0);
+                // ESCUDO PROTECTOR DINÁMICO (Breakeven a 0.8x ATR)
+                let stopLossCeiling = entryPrice + (atr * 1.5);
 
-                if (botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 0.4)) {
-                  stopLossCeiling = entryPrice - (atr * 0.1);
+                if (botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 0.8)) {
+                  stopLossCeiling = entryPrice - (atr * 0.2);
                   if (!botConfig.breakevenTriggered[symbol]) {
                     botConfig.breakevenTriggered[symbol] = true;
                     const bePriceShort = parseFloat((entryPrice - (atr * 0.2)).toFixed(posInfo.pricePrecision));
@@ -520,14 +518,14 @@ function runBotLoop() {
                   delete botConfig.tradeOpenTime[symbol];
                   delete botConfig.lowestPriceTracker[symbol];
                   botConfig.partialTaken[symbol] = false;
-                  botConfig.cooldownUntil[symbol] = Date.now() + 3 * 60 * 1000; // MICRO-SCALPING: 15 min de cooldown
+                  botConfig.cooldownUntil[symbol] = Date.now() + 15 * 60 * 1000; // 15 min de cooldown
                   botConfig.lastTradeTime[symbol] = 0;
                   persistState();
                   continue;
                 }
 
-                // TRAILING STOP SHORT (inicia en 1.0x ATR)
-                if (botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 1.0)) {
+                // TRAILING STOP SHORT (inicia en 2.0x ATR)
+                if (botConfig.lowestPriceTracker[symbol] < entryPrice - (atr * 2.0)) {
                   const maxFavorableMovement = entryPrice - botConfig.lowestPriceTracker[symbol];
                   const triggerPrice = entryPrice - (maxFavorableMovement * 0.75);
 
@@ -547,7 +545,7 @@ function runBotLoop() {
                     delete botConfig.tradeOpenTime[symbol];
                     delete botConfig.lowestPriceTracker[symbol];
                     botConfig.partialTaken[symbol] = false;
-                    botConfig.cooldownUntil[symbol] = Date.now() + 3 * 60 * 1000; // MICRO-SCALPING: 10 min de cooldown tras trailing stop
+                    botConfig.cooldownUntil[symbol] = Date.now() + 15 * 60 * 1000;
                     botConfig.lastTradeTime[symbol] = 0;
                     persistState();
                     continue;
@@ -581,15 +579,14 @@ function runBotLoop() {
           // En ese caso NO aplicamos la hora extra porque la penalización ya se cumplió.
           // Si NO había cooldownUntil, aplicamos 15m de cooldown (típico cierre por SL/TP externo).
           const hadEarlyExitCooldown = (botConfig.cooldownUntil[symbol] || 0) > 0;
-          const lastTradeCooldownMs = hadEarlyExitCooldown ? 0 : 3 * 60 * 1000;
+          const lastTradeCooldownMs = hadEarlyExitCooldown ? 0 : 15 * 60 * 1000;
           if (Date.now() - lastTrade < lastTradeCooldownMs) continue;
 
           let signal = analysis.signal;
           // Buffer reducido al 0.1% sobre EMA200: evita entradas exactamente en la barrera pero permite
           // breakouts legítimos que ocurren justo al cruzar la EMA200 (los mejores puntos de entrada).
-          // ULTRA MICRO-SCALPING: Filtro EMA200 desactivado (permite operar contra-tendencia en pullbacks rápidos)
-          // if (signal.includes('BUY') && analysis.currentPrice < analysis.ema200 * 1.001) signal = 'NEUTRAL';
-          // else if (signal.includes('SELL') && analysis.currentPrice > analysis.ema200 * 0.999) signal = 'NEUTRAL';
+          if (signal.includes('BUY') && analysis.currentPrice < analysis.ema200 * 1.001) signal = 'NEUTRAL';
+          else if (signal.includes('SELL') && analysis.currentPrice > analysis.ema200 * 0.999) signal = 'NEUTRAL';
 
           // ─── FILTRO INSTITUCIONAL MULTI-TIMEFRAME (1 HORA) ────────────────
           // Regla: solo bloquear si el mercado en 1H tiene una tendencia OPUESTA
@@ -609,21 +606,19 @@ function runBotLoop() {
                 const current15mPrice = closes15m[closes15m.length - 1];
 
                 // FILTRO 1: Solo bloquear si el TREND de 15m está estructuralmente en contra.
-                // ULTRA MICRO-SCALPING: Filtro 15m desactivado (opera puramente en 5m, ignorando macro-estructura)
-                // if (signal.includes('BUY') && current15mPrice < ema20_15m && ema20_15m < ema50_15m) {
-                //   console.log(`[AutoBot] 🛡️ ${symbol}: BUY bloqueado — Downtrend estructural confirmado en 15m (EMA20 ${ema20_15m.toFixed(2)} < EMA50 ${ema50_15m.toFixed(2)}).`);
-                //   signal = 'NEUTRAL';
-                // } else if (signal.includes('SELL') && current15mPrice > ema20_15m && ema20_15m > ema50_15m) {
-                //   console.log(`[AutoBot] 🛡️ ${symbol}: SELL bloqueado — Uptrend estructural confirmado en 15m (EMA20 ${ema20_15m.toFixed(2)} > EMA50 ${ema50_15m.toFixed(2)}).`);
-                //   signal = 'NEUTRAL';
-                // }
+                if (signal.includes('BUY') && current15mPrice < ema20_15m && ema20_15m < ema50_15m) {
+                  console.log(`[AutoBot] 🛡️ ${symbol}: BUY bloqueado — Downtrend estructural confirmado en 15m (EMA20 ${ema20_15m.toFixed(2)} < EMA50 ${ema50_15m.toFixed(2)}).`);
+                  signal = 'NEUTRAL';
+                } else if (signal.includes('SELL') && current15mPrice > ema20_15m && ema20_15m > ema50_15m) {
+                  console.log(`[AutoBot] 🛡️ ${symbol}: SELL bloqueado — Uptrend estructural confirmado en 15m (EMA20 ${ema20_15m.toFixed(2)} > EMA50 ${ema50_15m.toFixed(2)}).`);
+                  signal = 'NEUTRAL';
+                }
 
                 // FILTRO 2: Bloquear en chop lateral de 15m (ADX < 15)
-                // ULTRA MICRO-SCALPING: Filtro ADX 15m desactivado
-                // if (signal !== 'NEUTRAL' && adx15m > 0 && adx15m < 15) {
-                //   console.log(`[AutoBot] 🛡️ ${symbol}: ${signal} bloqueado — ADX de 15m muy débil (${adx15m} < 15). Mercado en chop puro.`);
-                //   signal = 'NEUTRAL';
-                // }
+                if (signal !== 'NEUTRAL' && adx15m > 0 && adx15m < 15) {
+                  console.log(`[AutoBot] 🛡️ ${symbol}: ${signal} bloqueado — ADX de 15m muy débil (${adx15m} < 15). Mercado en chop puro.`);
+                  signal = 'NEUTRAL';
+                }
               }
             } catch (err15m) {
               console.warn(`[AutoBot] ⚠️ No se pudo verificar tendencia de 15m para ${symbol}, evaluando solo 5m.`);
@@ -657,15 +652,17 @@ function runBotLoop() {
           const existingPosition = allActivePositions.find((p) => p.symbol === symbol);
           if (existingPosition) continue;
 
-          const side = signal.includes('BUY') ? 'BUY' : 'SELL';
+          // ─── ESTRATEGIA INVERSA (CONTRARIAN) ──────────────────────────────
+          // Si la señal técnica es BUY -> ejecutamos SHORT
+          // Si la señal técnica es SELL -> ejecutamos LONG
+          const rawSide = signal.includes('BUY') ? 'BUY' : 'SELL';
+          const side: 'BUY' | 'SELL' = rawSide === 'BUY' ? 'SELL' : 'BUY';
           const posSide: 'LONG' | 'SHORT' = side === 'BUY' ? 'LONG' : 'SHORT';
 
+          console.log(`[AutoBot] 🔄 MODO INVERSO: Señal técnica=${signal} -> Ejecutando ${posSide} (${side}) en ${symbol}`);
+
           // FIX: antes se limpiaba `forbiddenSide[symbol] = null` aquí mismo, antes de
-          // saber si la IA aprobaba o si la orden se ejecutaba con éxito. Si la IA vetaba
-          // o el placeOrder fallaba, el veto ya se había perdido sin haberse abierto ningún
-          // trade. Ahora solo se calcula si esta señal STRONG puede saltarse el veto
-          // (`forbiddenOverridden`), y el estado real `forbiddenSide` solo se limpia más
-          // abajo, tras un `orderRes.success === true` confirmado.
+          // saber si la IA aprobaba o si la orden se ejecutaba con éxito.
           const forbidden = botConfig.forbiddenSide[symbol];
           let forbiddenOverridden = false;
           if (forbidden === posSide) {
@@ -673,11 +670,11 @@ function runBotLoop() {
             forbiddenOverridden = true;
           }
 
-          // IA DESACTIVADA TEMPORALMENTE (a petición del usuario para mayor velocidad)
-          const aiValidation = { approved: true, confidence: 100, reason: 'IA DESACTIVADA (Micro-Scalping)' };
+          // IA DESACTIVADA TEMPORALMENTE
+          const aiValidation = { approved: true, confidence: 100, reason: 'MODO INVERSO (Contrarian Test)' };
           
           if (!aiValidation.approved) {
-            botConfig.cooldownUntil[symbol] = Date.now() + 3 * 60 * 1000;
+            botConfig.cooldownUntil[symbol] = Date.now() + 15 * 60 * 1000;
             continue;
           }
 
@@ -685,14 +682,10 @@ function runBotLoop() {
           const entryPrice = analysis.currentPrice;
           const info = getSymbolInfo(symbol);
 
-          // Base ATR (1.0x) para calcular distancias relativas
-          const atrDistance = analysis.atr > 0 ? Math.max(entryPrice * 0.002, analysis.atr * 1.0) : entryPrice * 0.003;
-          
-          // SL dinámico a 4.0x ATR (Mucho más oxígeno para la operación)
-          const stopLoss = posSide === 'LONG' ? entryPrice - (atrDistance * 4.0) : entryPrice + (atrDistance * 4.0);
-          
-          // TP exchange a 1.5x ATR (Micro ganancias rápidas)
-          const takeProfit = posSide === 'LONG' ? entryPrice + (atrDistance * 1.5) : entryPrice - (atrDistance * 1.5);
+          // Configuración Estándar: SL a 1.5x ATR y TP a 3.0x ATR (Ratio 1:2)
+          const atrDistance = analysis.atr > 0 ? Math.max(entryPrice * 0.002, analysis.atr * 1.5) : entryPrice * 0.003;
+          const stopLoss = posSide === 'LONG' ? entryPrice - atrDistance : entryPrice + atrDistance;
+          const takeProfit = posSide === 'LONG' ? entryPrice + (atrDistance * 2.0) : entryPrice - (atrDistance * 2.0);
 
           const riskCalc = RiskCalculator.calculate({
             accountBalance: balance.available > 0 ? balance.available : 10,
@@ -797,9 +790,10 @@ function runBotLoop() {
               `• <b>Par:</b> ${escHtml(symbol)}\n` +
               `• <b>Posición:</b> ${escHtml(posSide)} ${escHtml(botConfig.maxLeverage)}x\n` +
               `• <b>Entrada:</b> $${escHtml(entryPrice)}\n` +
+              `• <b>Modo:</b> 🔄 INVERSO (Señal: ${escHtml(signal)} → Posición: ${escHtml(posSide)})\n` +
               `• <b>Stop Loss:</b> $${escHtml(finalStopLoss)}\n` +
               `• <b>Take Profit:</b> $${escHtml(finalTakeProfit)}\n` +
-              `• <b>IA:</b> ${escHtml(aiValidation.confidence)}% — &quot;${escHtml(aiValidation.reason)}&quot;`
+              `• <b>Estrategia:</b> Contrarian Standard (Ratio 1:2)`
             );
           } else {
             // FIX: antes, si orderRes.success era false, no pasaba nada — pero
@@ -810,7 +804,7 @@ function runBotLoop() {
             // avisa por Telegram para que no pase desapercibido.
             console.error(`[AutoBot] ❌ Orden rechazada por el exchange en ${symbol}:`, orderRes.message);
             telegramBot.sendMessage(`⚠️ <b>ORDEN RECHAZADA</b>\n\n• Par: ${escHtml(symbol)}\n• Señal: ${escHtml(signal)}\n• Motivo: ${escHtml(orderRes.message)}\n• Se reintentará tras un breve cooldown.`);
-            botConfig.cooldownUntil[symbol] = Date.now() + 3 * 60 * 1000;
+            botConfig.cooldownUntil[symbol] = Date.now() + 15 * 60 * 1000;
           }
 
         } catch (err: any) {
@@ -870,7 +864,7 @@ function runBotLoop() {
                   botConfig.forbiddenSide[symbol] = closedSide;
                 }
               }
-              botConfig.cooldownUntil[symbol] = Date.now() + 1 * 60 * 1000; // ULTRA MICRO-SCALPING: 1 min de cooldown si se cierra a mano
+              botConfig.cooldownUntil[symbol] = Date.now() + 15 * 60 * 1000; // 15 min de cooldown si se cierra a mano o por SL
             }
 
             // Limpieza completa del estado post-cierre
