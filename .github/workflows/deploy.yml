@@ -17,9 +17,16 @@ jobs:
           username: ${{ secrets.AWS_USER }}
           key: ${{ secrets.AWS_SSH_KEY }}
           script: |
-            # 🚨 IMPORTANTE: El código del bot NUNCA debe estar en /var/www/html/
-            # porque tu archivo .env con las claves secretas quedaría expuesto a internet.
-            # El repositorio debe vivir en /home/ubuntu/Trade-Crypto
+            # --- AUTO-MIGRACIÓN DE SEGURIDAD ---
+            # Si el repositorio sigue en la carpeta pública, lo movemos a la zona segura automáticamente
+            if [ -d "/var/www/html/Trade-Crypto/.git" ] || [ -d "/var/www/html/Trade-Crypto/q-trade-pro" ]; then
+                echo "Moviendo repositorio a una zona segura..."
+                sudo mv /var/www/html/Trade-Crypto /home/ubuntu/Trade-Crypto || true
+                sudo chown -R ubuntu:ubuntu /home/ubuntu/Trade-Crypto
+            fi
+            
+            # Asegurarnos de que exista la carpeta por si acaso
+            mkdir -p /home/ubuntu/Trade-Crypto
             
             # 1. Navegar al repositorio seguro
             cd /home/ubuntu/Trade-Crypto
