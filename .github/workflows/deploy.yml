@@ -17,24 +17,35 @@ jobs:
           username: ${{ secrets.AWS_USER }}
           key: ${{ secrets.AWS_SSH_KEY }}
           script: |
-            #Probando
-
-            # Detener el proceso si existe, pero no fallar si no existe
-            pm2 stop trade-crypto || true
+            # Navegar al directorio del repositorio en tu servidor AWS
+            # Si lo clonaste en otra ruta (ej. /var/www/html/Trade-Crypto), cámbialo aquí
+            cd /home/ubuntu/Trade-Crypto
             
-            cd /var/www/html/Trade-Crypto
+            # Descargar los últimos cambios forzando sobreescritura (para evitar conflictos)
+            git fetch --all
+            git reset --hard origin/main
             
-            # Descargar los últimos cambios
-            git pull origin main
+            # Navegar a la carpeta del bot
+            cd q-trade-pro
             
-            # Instalar nuevas dependencias si las hay (usando npm si pnpm no está en el VPS)
-            pnpm install || npm install
+            # Activar el entorno virtual e instalar dependencias nuevas (si las hay)
+            source venv/bin/activate
+            pip install -r requirements.txt
             
-            # Compilar el código
+            # Reiniciar el servicio de systemd que mantiene vivo al bot (Backend)
+            sudo systemctl restart bot-trading
+            
+            # ---- DESPLIEGUE DEL FRONTEND ----
+            cd frontend
+            
+            # Instalar dependencias del frontend
+            npm install
+            
+            # Compilar el frontend (React/Vite)
             npm run build
             
-            # Iniciar o reiniciar PM2
-            pm2 restart trade-crypto || pm2 start dist/index.js --name trade-crypto
+            # Iniciar o reiniciar el frontend con PM2 (Servidor estático en el puerto 3000)
+            pm2 restart trade-frontend || pm2 serve dist 3000 --name "trade-frontend" --spa
             
             # Guardar la configuración de PM2
             pm2 save

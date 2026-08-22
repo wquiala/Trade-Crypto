@@ -1,0 +1,110 @@
+import time
+from typing import Dict, Any
+
+class PositionManager:
+    """
+    Gestiona el ciclo de vida de las posiciones abiertas (SL, Breakeven, Trailing Stop).
+    """
+    
+    COOLDOWN_SECONDS = 15 * 60  # 15 minutos de cooldown tras un Stop Loss
+    
+    def __init__(self, exchange_client, cooldown_dict: Dict[str, float] = None):
+        self.exchange = exchange_client
+        self.active_positions: Dict[str, Dict[str, Any]] = {}
+        self.cooldown_dict = cooldown_dict if cooldown_dict is not None else {}
+        
+    def register_position(self, symbol: str, setup: Dict[str, Any], size: float):
+        """
+        Registra una nueva posición recién abierta.
+        """
+        self.active_positions[symbol] = {
+            'signal': setup['signal'],
+            'entry_price': setup['entry_price'],
+            'size': size,
+            'stop_loss': setup['stop_loss'],
+            'take_profit': setup['take_profit'],
+            'atr': setup['atr'],
+            'breakeven_triggered': False,
+            'partial_taken': False,
+            'highest_price': setup['entry_price'],
+            'lowest_price': setup['entry_price'],
+            'unrealized_pnl': 0.0,
+            'pnl_pct': 0.0
+        }
+        print(f"[PositionManager] 📝 Posición registrada en {symbol}: {setup['signal']} @ {setup['entry_price']}")
+
+    async def sync_positions_from_exchange(self):
+        """
+        Descarga las posiciones de BingX y las carga en la memoria del bot.
+        """
+        print("[PositionManager] 🔄 Sincronizando posiciones abiertas con BingX...")
+        open_pos = await self.exchange.fetch_open_positions()
+        
+        for pos in open_pos:
+            symbol = pos['symbol']
+            size = float(pos.get('contracts', 0))
+            entry_price = float(pos.get('entryPrice', 0))
+            side = 'LONG' if pos['side'] == 'long' else 'SHORT'
+            
+            # Si ya la tenemos, la saltamos
+            if symbol in self.active_positions:
+                continue
+                
+            # Calcular ATR aproximado del precio actual (1% default fallback) para rearmar Stop Loss
+            atr_fallback = entry_price * 0.01
+            sl_distance = atr_fallback * 1.5
+            
+            stop_loss = entry_price - sl_distance if side == 'LONG' else entry_price + sl_distance
+            take_profit = entry_price + (sl_distance * 2) if side == 'LONG' else entry_price - (sl_distance * 2)
+            
+            self.active_positions[symbol] = {
+                'signal': side,
+                'entry_price': entry_price,
+                'size': size,
+                'stop_loss': stop_loss,
+                'take_profit': take_profit,
+                'atr': atr_fallback,
+                'breakeven_triggered': False,
+                'partial_taken': False,
+                'highest_price': entry_price,
+                'lowest_price': entry_price,
+                'unrealized_pnl': float(pos.get('unrealizedPnl', 0.0)),
+                'pnl_pct': float(pos.get('percentage', 0.0))
+            }
+            print(f"[PositionManager] ✅ Posición recuperada: {symbol} {side} @ {entry_price}")
+
+    async def update_active_positions(self, market_prices: Dict[str, float]):
+        """
+        Actualiza el PnL no realizado de las posiciones activas con precios en vivo.
+        
+        NOTA: BingX gestiona el cierre (SL/TP) mediante sus propias órdenes ancladas.
+        Este método SOLO actualiza métricas locales para el dashboard.
+        El ticker_loop ya elimina posiciones que BingX cerró (no aparecen en fetch_open_positions).
+        """
+        for symbol, pos in self.active_positions.items():
+            current_price = market_prices.get(symbol)
+            if not current_price:
+                continue
+
+            entry_price = pos['entry_price']
+            size = pos['size']
+
+            # Actualizar trackers de precio máximo y mínimo
+            pos['highest_price'] = max(pos['highest_price'], current_price)
+            pos['lowest_price'] = min(pos['lowest_price'], current_price)
+
+            # Calcular PnL no realizado estimado (local, solo para el dashboard)
+            if pos['signal'] == 'LONG':
+                pos['unrealized_pnl'] = (current_price - entry_price) * size
+            else:  # SHORT
+                pos['unrealized_pnl'] = (entry_price - current_price) * size
+
+            # Calcular porcentaje de PnL
+            invested = entry_price * size
+            pos['pnl_pct'] = (pos['unrealized_pnl'] / invested * 100) if invested > 0 else 0.0
+
+            # Log informativo (no ejecuta ninguna orden)
+            emoji = '🟢' if pos['unrealized_pnl'] >= 0 else '🔴'
+            print(f"[PosTracker] {emoji} {symbol} {pos['signal']} | Precio: {current_price:.4f} "
+                  f"| PnL: ${pos['unrealized_pnl']:+.2f} ({pos['pnl_pct']:+.2f}%) "
+                  f"| SL BingX: {pos['stop_loss']:.4f} | TP BingX: {pos['take_profit']:.4f}")

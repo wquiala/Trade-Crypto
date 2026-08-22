@@ -1,0 +1,11 @@
+ccxt
+pandas
+ta
+numpy
+SQLAlchemy
+PyYAML
+python-dotenv
+aiohttp
+pytest
+fastapi
+uvicorn
