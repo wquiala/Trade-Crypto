@@ -17,38 +17,38 @@ jobs:
           username: ${{ secrets.AWS_USER }}
           key: ${{ secrets.AWS_SSH_KEY }}
           script: |
-            # Navegar al directorio del repositorio en tu servidor AWS
-            # Si lo clonaste en otra ruta (ej. /var/www/html/Trade-Crypto), cámbialo aquí
-
-            # Asignar los permisos correctos para que Apache pueda leer los archivos
-            sudo chown -R www-data:www-data /var/www/html/
-            sudo chmod -R 755 /var/www/html/
+            # 🚨 IMPORTANTE: El código del bot NUNCA debe estar en /var/www/html/
+            # porque tu archivo .env con las claves secretas quedaría expuesto a internet.
+            # El repositorio debe vivir en /home/ubuntu/Trade-Crypto
             
-            cd /var/www/html/Trade-Crypto
+            # 1. Navegar al repositorio seguro
+            cd /home/ubuntu/Trade-Crypto
             
-            # Descargar los últimos cambios forzando sobreescritura (para evitar conflictos)
+            # (Opcional) Arreglar permisos de git por si acaso
+            git config --global --add safe.directory /home/ubuntu/Trade-Crypto
+            
+            # 2. Bajar cambios de Github
             git fetch --all
             git reset --hard origin/main
             
-            # Navegar a la carpeta del bot
+            # 3. Actualizar el bot de Python
             cd q-trade-pro
-            
-            # Activar el entorno virtual e instalar dependencias nuevas (si las hay)
             source venv/bin/activate
             pip install -r requirements.txt
             
-            # Reiniciar el servicio de systemd que mantiene vivo al bot (Backend)
-            sudo systemctl restart bot-trading
+            # Reiniciar el servicio (Ignorar error si el servicio aún no existe)
+            sudo systemctl restart bot-trading || echo "Servicio bot-trading no encontrado, saltando..."
             
-            # ---- DESPLIEGUE DEL FRONTEND (Para Apache) ----
+            # 4. Desplegar the Frontend (solo los archivos estáticos) a Apache
             cd frontend
             
-            # Ya no compilamos en AWS. Usaremos la carpeta 'dist' que subiste a Github.
+            # Crear y limpiar la carpeta pública de Apache
+            sudo mkdir -p /var/www/html/Trade-Crypto
+            sudo rm -rf /var/www/html/Trade-Crypto/*
             
-            # Crear la carpeta destino en Apache (si no existe) y limpiarla
-            # Ajusta esta ruta si tu VirtualHost de Apache apunta a otro lado
-            
-            # Copiar los archivos compilados a la carpeta pública de Apache
+            # Copiar SOLO la carpeta dist a la zona pública
             sudo cp -r dist/* /var/www/html/Trade-Crypto/
             
-            
+            # Asignar permisos correctos para Apache
+            sudo chown -R www-data:www-data /var/www/html/Trade-Crypto/
+            sudo chmod -R 755 /var/www/html/Trade-Crypto/
