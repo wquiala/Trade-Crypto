@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Activity, Wallet, ShieldAlert, Zap, TrendingUp, TrendingDown } from 'lucide-react';
 
-const API_BASE = 'http://127.0.0.1:8000/api';
+// Usamos una ruta relativa para que Apache envíe las peticiones al puerto 8000 por detrás
+const API_BASE = '/api';
 
 function App() {
   const [status, setStatus] = useState<any>(null);
