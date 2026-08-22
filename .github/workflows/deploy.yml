@@ -43,8 +43,9 @@ jobs:
             source venv/bin/activate
             pip install -r requirements.txt
             
-            # Reiniciar el servicio (Ignorar error si el servicio aún no existe)
-            sudo systemctl restart bot-trading || echo "Servicio bot-trading no encontrado, saltando..."
+            # Reiniciar o arrancar el bot de Python usando PM2
+            pm2 restart bot-trading || pm2 start main.py --interpreter ./venv/bin/python --name "bot-trading"
+            pm2 save
             
             # 4. Desplegar the Frontend (solo los archivos estáticos) a Apache
             cd frontend
