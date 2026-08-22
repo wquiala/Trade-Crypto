@@ -35,17 +35,21 @@ jobs:
             # Reiniciar el servicio de systemd que mantiene vivo al bot (Backend)
             sudo systemctl restart bot-trading
             
-            # ---- DESPLIEGUE DEL FRONTEND ----
+            # ---- DESPLIEGUE DEL FRONTEND (Para Apache) ----
             cd frontend
             
-            # Instalar dependencias del frontend
+            # Instalar dependencias y compilar el frontend (React/Vite)
             npm install
-            
-            # Compilar el frontend (React/Vite)
             npm run build
             
-            # Iniciar o reiniciar el frontend con PM2 (Servidor estático en el puerto 3000)
-            pm2 restart trade-frontend || pm2 serve dist 3000 --name "trade-frontend" --spa
+            # Crear la carpeta destino en Apache (si no existe) y limpiarla
+            # Ajusta esta ruta si tu VirtualHost de Apache apunta a otro lado
+            sudo mkdir -p /var/www/html/Trade-Crypto
+            sudo rm -rf /var/www/html/Trade-Crypto/*
             
-            # Guardar la configuración de PM2
-            pm2 save
+            # Copiar los archivos compilados a la carpeta pública de Apache
+            sudo cp -r dist/* /var/www/html/Trade-Crypto/
+            
+            # Asignar los permisos correctos para que Apache pueda leer los archivos
+            sudo chown -R www-data:www-data /var/www/html/Trade-Crypto/
+            sudo chmod -R 755 /var/www/html/Trade-Crypto/
