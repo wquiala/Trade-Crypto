@@ -43,9 +43,7 @@ jobs:
             # ---- DESPLIEGUE DEL FRONTEND (Para Apache) ----
             cd frontend
             
-            # Instalar dependencias y compilar el frontend (React/Vite)
-            npm install
-            npm run build
+            # Ya no compilamos en AWS. Usaremos la carpeta 'dist' que subiste a Github.
             
             # Crear la carpeta destino en Apache (si no existe) y limpiarla
             # Ajusta esta ruta si tu VirtualHost de Apache apunta a otro lado
