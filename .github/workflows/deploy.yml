@@ -40,6 +40,14 @@ jobs:
             
             # 3. Actualizar el bot de Python
             cd q-trade-pro
+            
+            # Auto-crear entorno virtual si no existe
+            if [ ! -d "venv" ]; then
+                echo "Creando entorno virtual de Python..."
+                sudo apt-get install python3-venv -y || true
+                python3 -m venv venv
+            fi
+            
             source venv/bin/activate
             pip install -r requirements.txt
             
