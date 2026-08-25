@@ -30,11 +30,11 @@ class RegimeDetector:
         # Podría implementarse con percentiles históricos de ATR
         
         # 2. Ranging (Mercado Lateral)
-        if adx < 18:
+        if adx < 20:
             return 'RANGING'
             
         # 3. Tendencias
-        if adx >= 20:
+        if adx >= 25:
             if close > ema50 and ema50 > ema200:
                 return 'BULL_TREND'
             elif close < ema50 and ema50 < ema200:
