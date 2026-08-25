@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Activity, Wallet, ShieldAlert, Zap, TrendingUp, TrendingDown } from 'lucide-react';
 
-// Usamos una ruta relativa para que Apache envíe las peticiones al puerto 8000 por detrás
-const API_BASE = '/api';
+// Usamos ruta relativa (proxy de Vite o Apache) con fallback a localhost:8000
+const API_BASE = window.location.port === '5173' ? 'http://127.0.0.1:8000/api' : '/api';
+
 
 function App() {
   const [status, setStatus] = useState<any>(null);
