@@ -99,7 +99,8 @@ async def ticker_loop(exchange: ExchangeClient, pos_manager: PositionManager):
     symbols_to_trade = [
         'BTC/USDT:USDT', 'ETH/USDT:USDT', 'SOL/USDT:USDT', 'BNB/USDT:USDT', 'XRP/USDT:USDT',
         'ADA/USDT:USDT', 'DOGE/USDT:USDT', 'AVAX/USDT:USDT', 'LINK/USDT:USDT',
-        'SUI/USDT:USDT', 'NEAR/USDT:USDT', 'INJ/USDT:USDT'
+        'SUI/USDT:USDT', 'NEAR/USDT:USDT', 'INJ/USDT:USDT', 'TAO/USDT:USDT', 'RENDER/USDT:USDT',
+        'FET/USDT:USDT', 'APT/USDT:USDT', 'SEI/USDT:USDT', '1000PEPE/USDT:USDT', 'WIF/USDT:USDT'
     ]
     
     global CAPITAL_INICIAL_DIA, LAST_RESET_DATE
@@ -185,7 +186,8 @@ async def trading_loop(exchange: ExchangeClient, pos_manager: PositionManager):
     symbols_to_trade = [
         'BTC/USDT:USDT', 'ETH/USDT:USDT', 'SOL/USDT:USDT', 'BNB/USDT:USDT', 'XRP/USDT:USDT',
         'ADA/USDT:USDT', 'DOGE/USDT:USDT', 'AVAX/USDT:USDT', 'LINK/USDT:USDT',
-        'SUI/USDT:USDT', 'NEAR/USDT:USDT', 'INJ/USDT:USDT'
+        'SUI/USDT:USDT', 'NEAR/USDT:USDT', 'INJ/USDT:USDT', 'TAO/USDT:USDT', 'RENDER/USDT:USDT',
+        'FET/USDT:USDT', 'APT/USDT:USDT', 'SEI/USDT:USDT', '1000PEPE/USDT:USDT', 'WIF/USDT:USDT'
     ]
     
     while True:
@@ -200,7 +202,8 @@ async def history_loop(exchange: ExchangeClient):
     symbols_to_trade = [
         'BTC/USDT:USDT', 'ETH/USDT:USDT', 'SOL/USDT:USDT', 'BNB/USDT:USDT', 'XRP/USDT:USDT',
         'ADA/USDT:USDT', 'DOGE/USDT:USDT', 'AVAX/USDT:USDT', 'LINK/USDT:USDT',
-        'SUI/USDT:USDT', 'NEAR/USDT:USDT', 'INJ/USDT:USDT'
+        'SUI/USDT:USDT', 'NEAR/USDT:USDT', 'INJ/USDT:USDT', 'TAO/USDT:USDT', 'RENDER/USDT:USDT',
+        'FET/USDT:USDT', 'APT/USDT:USDT', 'SEI/USDT:USDT', '1000PEPE/USDT:USDT', 'WIF/USDT:USDT'
     ]
     
     while True:
