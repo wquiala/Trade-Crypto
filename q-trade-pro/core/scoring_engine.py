@@ -41,9 +41,9 @@ class ScoringEngine:
         # ── BULL_TREND: Solo LONG ─────────────────────────────────────────
         if regime == 'BULL_TREND':
             # ADX obligatorio
-            if adx >= 25:
+            if adx >= 20:
                 score += 20
-            elif adx >= 20:
+            elif adx >= 15:
                 score += 10
             else:
                 return 0, {'signal': 'NEUTRAL', 'regime': regime, 'entry_price': close, 'atr': atr}
@@ -77,9 +77,9 @@ class ScoringEngine:
 
         # ── BEAR_TREND: Solo SHORT ────────────────────────────────────────
         elif regime == 'BEAR_TREND':
-            if adx >= 25:
+            if adx >= 20:
                 score += 20
-            elif adx >= 20:
+            elif adx >= 15:
                 score += 10
             else:
                 return 0, {'signal': 'NEUTRAL', 'regime': regime, 'entry_price': close, 'atr': atr}
