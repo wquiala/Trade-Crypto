@@ -8,7 +8,7 @@ class RegimeDetector:
     @staticmethod
     def detect(df_higher: pd.DataFrame) -> str:
         """
-        Clasifica el estado del mercado evaluando la última vela cerrada.
+        Clasifica el estado del mercado evaluando la última vela cerradaAA.
         
         Regímenes posibles:
         - BULL_TREND: Precio sobre EMAs, ADX fuerte, EMA corta > EMA larga.
