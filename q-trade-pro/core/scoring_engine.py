@@ -17,7 +17,7 @@ class ScoringEngine:
         if df_lower.empty or len(df_lower) < 3:
             return 0, {}
 
-        # TRANSITION y regímenes desconocidos: nunca operamos
+        # TRANSITION y regímenes desconocidos: nunca operamosss
         if regime in ['UNKNOWN', 'EXTREME_VOLATILITY', 'CHOP', 'TRANSITION']:
             return 0, {'signal': 'NEUTRAL', 'regime': regime, 'entry_price': 0, 'atr': 0}
 
