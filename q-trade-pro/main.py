@@ -23,7 +23,7 @@ from api.server import app, bot_state
 CAPITAL_INICIAL_DIA = 1000.0
 LAST_RESET_DATE = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-# Cooldown por símbolo: tiempo mínimo de espera tras cerrar una posición (15 minutos)
+# Cooldown por símbolo: tiempo mínimo de espera tras cerrar una posición (5 minutos)
 SYMBOL_COOLDOWN: Dict[str, float] = {}
 
 # Máximo de posiciones simultáneas (gestión de riesgo global)
@@ -135,9 +135,9 @@ async def ticker_loop(exchange: ExchangeClient, pos_manager: PositionManager):
             for sym in list(pos_manager.active_positions.keys()):
                 if sym not in open_symbols:
                     print(f"[{sym}] 🗑 Posición cerrada por BingX (SL/TP). Removiendo del tracker.")
-                    # Activar cooldown de 15min para no volver a entrar inmediatamente
-                    SYMBOL_COOLDOWN[sym] = time.time() + (15 * 60)
-                    print(f"[{sym}] ⏳ Cooldown de 15min activado tras cierre en BingX.")
+                    # Activar cooldown de 5min para no volver a entrar inmediatamente
+                    SYMBOL_COOLDOWN[sym] = time.time() + (5 * 60)
+                    print(f"[{sym}] ⏳ Cooldown de 5min activado tras cierre en BingX.")
                     del pos_manager.active_positions[sym]
                     
             # Agregar nuevas y actualizar PnL
@@ -156,7 +156,7 @@ async def ticker_loop(exchange: ExchangeClient, pos_manager: PositionManager):
                         'entry_price': entry_price,
                         'size': size,
                         'stop_loss': entry_price - sl_dist if side == 'LONG' else entry_price + sl_dist,
-                        'take_profit': entry_price + (sl_dist * 2) if side == 'LONG' else entry_price - (sl_dist * 2),
+                        'take_profit': entry_price * 1.015 if side == 'LONG' else entry_price * 0.985,
                         'atr': atr_fallback,
                         'breakeven_triggered': False,
                         'partial_taken': False,

@@ -11,7 +11,7 @@ class RiskManager:
 
     MAX_RISK_PER_TRADE_PCT = 0.02   # 2% por trade (mayor agresividad)
     SL_ATR_MULT            = 1.5    # Stop Loss = 1.5x ATR
-    TP_ATR_MULT            = 3.0    # Take Profit = 3.0x ATR  →  RR = 1:2
+    TP_PCT                 = 0.015  # Take Profit = 1.5% fijo
 
     @staticmethod
     def validate_and_size(
@@ -32,7 +32,7 @@ class RiskManager:
             return False, 0.0
 
         sl_distance = atr * RiskManager.SL_ATR_MULT
-        tp_distance = atr * RiskManager.TP_ATR_MULT
+        tp_distance = entry_price * RiskManager.TP_PCT
 
         # Riesgo monetario máximo por trade
         max_monetary_risk = current_capital * RiskManager.MAX_RISK_PER_TRADE_PCT

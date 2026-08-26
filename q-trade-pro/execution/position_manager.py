@@ -6,7 +6,7 @@ class PositionManager:
     Gestiona el ciclo de vida de las posiciones abiertas (SL, Breakeven, Trailing Stop).
     """
     
-    COOLDOWN_SECONDS = 15 * 60  # 15 minutos de cooldown tras un Stop Loss
+    COOLDOWN_SECONDS = 5 * 60  # 5 minutos de cooldown tras un Stop Loss
     
     def __init__(self, exchange_client, cooldown_dict: Dict[str, float] = None):
         self.exchange = exchange_client
@@ -55,7 +55,8 @@ class PositionManager:
             sl_distance = atr_fallback * 1.5
             
             stop_loss = entry_price - sl_distance if side == 'LONG' else entry_price + sl_distance
-            take_profit = entry_price + (sl_distance * 2) if side == 'LONG' else entry_price - (sl_distance * 2)
+            tp_distance = entry_price * 0.015
+            take_profit = entry_price + tp_distance if side == 'LONG' else entry_price - tp_distance
             
             self.active_positions[symbol] = {
                 'signal': side,
