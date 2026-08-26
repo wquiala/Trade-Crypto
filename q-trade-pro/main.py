@@ -50,7 +50,7 @@ async def analyze_symbol(symbol: str, exchange: ExchangeClient, pos_manager: Pos
         }
 
         # Ignorar señales neutras
-        if setup.get('signal') == 'NEUTRAL' or score < 80:
+        if setup.get('signal') == 'NEUTRAL' or score < 70:
             return
 
         # No entrar si ya hay posición abierta en este símbolo
