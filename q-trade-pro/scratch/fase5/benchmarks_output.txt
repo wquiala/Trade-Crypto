@@ -1,0 +1,54 @@
+📥 Descargando datos TRAIN (4 meses)...
+📥 Descargando 4 meses de datos de Binance...
+   BTC/USDT:USDT... ✓ 11712 velas 15m
+   ETH/USDT:USDT... ✓ 11712 velas 15m
+   SOL/USDT:USDT... ✓ 11712 velas 15m
+   BNB/USDT:USDT... ✓ 11712 velas 15m
+   XRP/USDT:USDT... ✓ 11712 velas 15m
+   ADA/USDT:USDT... ✓ 11712 velas 15m
+   DOGE/USDT:USDT... ✓ 11712 velas 15m
+   AVAX/USDT:USDT... ✓ 11712 velas 15m
+   LINK/USDT:USDT... ✓ 11712 velas 15m
+✅ Datos preparados y saneados para 9 símbolos.
+--- BENCHMARKS FASE 5 ---
+
+[A] Buy & Hold (Distribución incondicional)
+Horizonte +1 velas:
+  Media: -0.0002% | Mediana: 0.0000% | Std: 0.3125% | Win Prob: 48.44%
+Horizonte +2 velas:
+  Media: 0.0004% | Mediana: 0.0000% | Std: 0.4394% | Win Prob: 48.90%
+Horizonte +4 velas:
+  Media: 0.0016% | Mediana: 0.0000% | Std: 0.6169% | Win Prob: 49.33%
+Horizonte +8 velas:
+  Media: 0.0036% | Mediana: 0.0000% | Std: 0.8612% | Win Prob: 49.69%
+Horizonte +16 velas:
+  Media: 0.0079% | Mediana: -0.0071% | Std: 1.1804% | Win Prob: 49.24%
+Horizonte +32 velas:
+  Media: 0.0157% | Mediana: 0.0017% | Std: 1.6315% | Win Prob: 50.02%
+Horizonte +48 velas:
+  Media: 0.0233% | Mediana: 0.0073% | Std: 1.9892% | Win Prob: 50.10%
+
+[B] Random Entry (Con y Sin Costes)
+Horizonte +1 velas:
+  Random RAW (sin costes): -0.0003%
+  Random NET (con costes): -0.2003%
+Horizonte +2 velas:
+  Random RAW (sin costes): -0.0005%
+  Random NET (con costes): -0.2005%
+Horizonte +4 velas:
+  Random RAW (sin costes): 0.0041%
+  Random NET (con costes): -0.1959%
+Horizonte +8 velas:
+  Random RAW (sin costes): 0.0009%
+  Random NET (con costes): -0.1991%
+Horizonte +16 velas:
+  Random RAW (sin costes): -0.0032%
+  Random NET (con costes): -0.2032%
+Horizonte +32 velas:
+  Random RAW (sin costes): 0.0065%
+  Random NET (con costes): -0.1935%
+Horizonte +48 velas:
+  Random RAW (sin costes): 0.0129%
+  Random NET (con costes): -0.1871%
+
+--- FIN BENCHMARKS ---

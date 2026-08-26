@@ -6,9 +6,15 @@ class RegimeDetector:
     """
     
     @staticmethod
-    def detect(df_higher: pd.DataFrame) -> str:
+    def detect(df_higher: pd.DataFrame, adx_threshold: int = 20) -> str:
         """
         Clasifica el estado del mercado evaluando la última vela cerrada.
+        
+        Parámetros
+        ----------
+        df_higher     : DataFrame con indicadores HTF ya calculados.
+        adx_threshold : ADX mínimo para considerar tendencia (default=20).
+                        Usa 25 para filtrar tendencias más fuertes.
         
         Regímenes posibles:
         - BULL_TREND: Precio sobre EMAs, ADX fuerte, EMA corta > EMA larga.
@@ -34,7 +40,7 @@ class RegimeDetector:
             return 'RANGING'
             
         # 3. Tendencias
-        if adx >= 20:
+        if adx >= adx_threshold:
             if close > ema50 and ema50 > ema200:
                 return 'BULL_TREND'
             elif close < ema50 and ema50 < ema200:

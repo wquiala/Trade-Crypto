@@ -44,9 +44,9 @@ class StrategyConfig:
     NO bajar este threshold sin evidencia OOS clara.
     """
     # ── Régimen HTF ───────────────────────────────────────────────────────────
-    adx_ranging_threshold: float = 18.0     # ADX < X → RANGING
-    adx_trend_threshold: float = 20.0       # ADX >= X para ser candidato a TREND
-    adx_strong_trend: float = 25.0          # ADX >= X → puntuación ADX máxima
+    adx_ranging_threshold: float = 13.0     # ADX < X → RANGING
+    adx_trend_threshold: float = 15.0       # ADX >= X para ser candidato a TREND
+    adx_strong_trend: float = 20.0          # ADX >= X → puntuación ADX máxima
 
     # ── Volatilidad extrema ───────────────────────────────────────────────────
     extreme_vol_percentile: float = 0.95    # ATR/close > P95 → EXTREME_VOLATILITY

@@ -1,0 +1,14 @@
+📥 Descargando datos TRAIN (4 meses)...
+📥 Descargando 4 meses de datos de Binance...
+   BTC/USDT:USDT... ✓ 11712 velas 15m
+   ETH/USDT:USDT... ✓ 11712 velas 15m
+   SOL/USDT:USDT... ✓ 11712 velas 15m
+   BNB/USDT:USDT... ✓ 11712 velas 15m
+   XRP/USDT:USDT... ✓ 11712 velas 15m
+   ADA/USDT:USDT... ✓ 11712 velas 15m
+   DOGE/USDT:USDT... ✓ 11712 velas 15m
+   AVAX/USDT:USDT... ✓ 11712 velas 15m
+   LINK/USDT:USDT... ✓ 11712 velas 15m
+✅ Datos preparados y saneados para 9 símbolos.
+🚀 Iniciando FASE 5: Edge Discovery...
+✅ Reporte FASE 5 generado exitosamente.

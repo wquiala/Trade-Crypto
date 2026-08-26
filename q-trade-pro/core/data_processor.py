@@ -124,12 +124,21 @@ class MarketDataFetcher:
         htf_cols = {col: f"{col}_htf" for col in htf.columns}
         htf = htf.rename(columns=htf_cols)
 
-        # Paso 3: merge_asof con direction='backward'
-        # Para cada fila LTF, busca la última fila HTF cuyo índice <= ltf_timestamp
-        # Esto equivale a buscar la última vela HTF cuyo close_time <= ltf_open_time
+        # Paso 3: Normalizar la precisión del índice datetime antes del merge.
+        # normalize_klines() produce datetime64[ms, UTC] (timestamp de Binance en ms).
+        # La suma de pd.Timedelta eleva la precisión a datetime64[us, UTC].
+        # merge_asof requiere que ambas claves sean del mismo dtype exacto.
         ltf_sorted = df_ltf.sort_index()
         htf_sorted = htf.sort_index()
 
+        # Convertir ambos al mismo dtype para evitar MergeError
+        target_dtype = "datetime64[us, UTC]"
+        ltf_sorted.index = ltf_sorted.index.astype(target_dtype)
+        htf_sorted.index = htf_sorted.index.astype(target_dtype)
+
+        # Paso 4: merge_asof con direction='backward'
+        # Para cada fila LTF, busca la última fila HTF cuyo índice <= ltf_timestamp
+        # Esto equivale a buscar la última vela HTF cuyo close_time <= ltf_open_time
         merged = pd.merge_asof(
             ltf_sorted,
             htf_sorted,
