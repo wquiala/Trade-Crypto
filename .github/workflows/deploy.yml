@@ -34,7 +34,7 @@ jobs:
             # (Opcional) Arreglar permisos de git por si acaso
             git config --global --add safe.directory /home/ubuntu/Trade-Crypto
             
-            # 2. Bajar cambios de Github
+            # 2. Bajar cambios de Github si existe el repositorio
             if [ -d ".git" ]; then
                 echo "Actualizando repositorio existente..."
                 git fetch --all
