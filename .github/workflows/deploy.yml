@@ -1,10 +1,9 @@
-name: Deploy to AWS EC2 2
+name: Deploy to AWS EC2
 
 on:
   push:
     branches:
       - main # O cambia a 'master' si esa es tu rama principal
-  workflow_dispatch: # Esto te permite ejecutarlo manualmente con un botón
 
 jobs:
   deploy:
@@ -18,40 +17,33 @@ jobs:
           username: ${{ secrets.AWS_USER }}
           key: ${{ secrets.AWS_SSH_KEY }}
           script: |
-            set -e # Detener el script si ocurre algún error
-            
             # --- AUTO-MIGRACIÓN DE SEGURIDAD ---
+            # Si el repositorio sigue en la carpeta pública, lo movemos a la zona segura automáticamente
             if [ -d "/var/www/html/Trade-Crypto/.git" ] || [ -d "/var/www/html/Trade-Crypto/q-trade-pro" ]; then
                 echo "Moviendo repositorio a una zona segura..."
                 sudo mv /var/www/html/Trade-Crypto /home/ubuntu/Trade-Crypto || true
                 sudo chown -R ubuntu:ubuntu /home/ubuntu/Trade-Crypto
             fi
             
-            # 1. Navegar al home y asegurar el clonado
-            cd /home/ubuntu
-            if [ ! -d "Trade-Crypto/.git" ]; then
-                echo "Clonando repositorio desde cero..."
-                sudo rm -rf Trade-Crypto # Borrar si había una carpeta corrupta o incompleta
-                git clone https://github.com/wquiala/Trade-Crypto.git
-            fi
+            # Asegurarnos de que exista la carpeta por si acaso
+            mkdir -p /home/ubuntu/Trade-Crypto
             
-            cd Trade-Crypto
+            # 1. Navegar al repositorio seguro
+            cd /home/ubuntu/Trade-Crypto
             
-            # (Opcional) Arreglar permisos de git
+            # (Opcional) Arreglar permisos de git por si acaso
             git config --global --add safe.directory /home/ubuntu/Trade-Crypto
             
             # 2. Bajar cambios de Github
-            echo "Actualizando repositorio..."
             git fetch --all
             git reset --hard origin/main
             
             # 3. Actualizar el bot de Python
-            cd /home/ubuntu/Trade-Crypto/q-trade-pro
+            cd q-trade-pro
             
             # Auto-crear entorno virtual si no existe
             if [ ! -d "venv" ]; then
                 echo "Creando entorno virtual de Python..."
-                sudo apt-get update || true
                 sudo apt-get install python3-venv -y || true
                 python3 -m venv venv
             fi
@@ -63,18 +55,12 @@ jobs:
             pm2 restart bot-trading || pm2 start main.py --interpreter ./venv/bin/python --name "bot-trading"
             pm2 save
             
-            # 4. Desplegar el Frontend
+            # 4. Desplegar the Frontend (solo los archivos estáticos) a Apache
             cd frontend
             
-            # Instalar dependencias y compilar
+            # Instalar dependencias y compilar el frontend
             npm install
             npm run build
-            
-            # Verificar que la compilación generó la carpeta dist antes de borrar la pública
-            if [ ! -d "dist" ] || [ -z "$(ls -A dist)" ]; then
-                echo "Error: La carpeta dist no se generó correctamente o está vacía. Abortando."
-                exit 1
-            fi
             
             # Crear y limpiar la carpeta pública de Apache
             sudo mkdir -p /var/www/html/Trade-Crypto
@@ -83,6 +69,6 @@ jobs:
             # Copiar SOLO la carpeta dist a la zona pública
             sudo cp -r dist/* /var/www/html/Trade-Crypto/
             
-            # Asignar permisos correctos para Apache
+            # Asignar permisos correctos para Apache s
             sudo chown -R www-data:www-data /var/www/html/Trade-Crypto/
             sudo chmod -R 755 /var/www/html/Trade-Crypto/
