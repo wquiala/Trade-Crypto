@@ -27,7 +27,7 @@ LAST_RESET_DATE = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 SYMBOL_COOLDOWN: Dict[str, float] = {}
 
 # Máximo de posiciones simultáneas (gestión de riesgo global)
-MAX_CONCURRENT_POSITIONS = 7   # Total de posiciones abiertas
+MAX_CONCURRENT_POSITIONS = 10  # Total de posiciones abiertas
 MAX_SAME_DIRECTION       = 5   # Máx en la misma dirección (evita sobreexposición correlada)
 
 async def analyze_symbol(symbol: str, exchange: ExchangeClient, pos_manager: PositionManager):
@@ -101,7 +101,7 @@ async def ticker_loop(exchange: ExchangeClient, pos_manager: PositionManager):
         'ADA/USDT:USDT', 'DOGE/USDT:USDT', 'AVAX/USDT:USDT', 'LINK/USDT:USDT',
         'SUI/USDT:USDT', 'NEAR/USDT:USDT', 'INJ/USDT:USDT', 'TAO/USDT:USDT', 'RENDER/USDT:USDT',
         'FET/USDT:USDT', 'APT/USDT:USDT', 'SEI/USDT:USDT', '1000PEPE/USDT:USDT', 'WIF/USDT:USDT',
-        'HYPE/USDT:USDT', 'BLESS/USDT:USDT', 'BANK/USDT:USDT'
+        'HYPE/USDT:USDT', 'BLESS/USDT:USDT', 'BANK/USDT:USDT', 'ZEC/USDT:USDT'
     ]
     
     global CAPITAL_INICIAL_DIA, LAST_RESET_DATE
@@ -189,7 +189,7 @@ async def trading_loop(exchange: ExchangeClient, pos_manager: PositionManager):
         'ADA/USDT:USDT', 'DOGE/USDT:USDT', 'AVAX/USDT:USDT', 'LINK/USDT:USDT',
         'SUI/USDT:USDT', 'NEAR/USDT:USDT', 'INJ/USDT:USDT', 'TAO/USDT:USDT', 'RENDER/USDT:USDT',
         'FET/USDT:USDT', 'APT/USDT:USDT', 'SEI/USDT:USDT', '1000PEPE/USDT:USDT', 'WIF/USDT:USDT',
-        'HYPE/USDT:USDT', 'BLESS/USDT:USDT', 'BANK/USDT:USDT'
+        'HYPE/USDT:USDT', 'BLESS/USDT:USDT', 'BANK/USDT:USDT', 'ZEC/USDT:USDT'
     ]
     
     while True:
@@ -206,7 +206,7 @@ async def history_loop(exchange: ExchangeClient):
         'ADA/USDT:USDT', 'DOGE/USDT:USDT', 'AVAX/USDT:USDT', 'LINK/USDT:USDT',
         'SUI/USDT:USDT', 'NEAR/USDT:USDT', 'INJ/USDT:USDT', 'TAO/USDT:USDT', 'RENDER/USDT:USDT',
         'FET/USDT:USDT', 'APT/USDT:USDT', 'SEI/USDT:USDT', '1000PEPE/USDT:USDT', 'WIF/USDT:USDT',
-        'HYPE/USDT:USDT', 'BLESS/USDT:USDT', 'BANK/USDT:USDT'
+        'HYPE/USDT:USDT', 'BLESS/USDT:USDT', 'BANK/USDT:USDT', 'ZEC/USDT:USDT'
     ]
     
     while True:
