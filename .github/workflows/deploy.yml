@@ -35,11 +35,17 @@ jobs:
             git config --global --add safe.directory /home/ubuntu/Trade-Crypto
             
             # 2. Bajar cambios de Github
-            git fetch --all
-            git reset --hard origin/main
+            if [ -d ".git" ]; then
+                echo "Actualizando repositorio existente..."
+                git fetch --all
+                git reset --hard origin/main
+            else
+                echo "Clonando repositorio por primera vez..."
+                git clone https://github.com/wquiala/Trade-Crypto.git .
+            fi
             
             # 3. Actualizar el bot de Python
-            cd q-trade-pro
+            cd /home/ubuntu/Trade-Crypto/q-trade-pro
             
             # Auto-crear entorno virtual si no existe
             if [ ! -d "venv" ]; then
