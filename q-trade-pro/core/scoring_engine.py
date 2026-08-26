@@ -72,7 +72,7 @@ class ScoringEngine:
             elif macd_h > macd_h_prev:
                 score += 5
 
-            if score >= 80:
+            if score >= 70:
                 signal = 'LONG'
 
         # ── BEAR_TREND: Solo SHORT ────────────────────────────────────────
@@ -108,7 +108,7 @@ class ScoringEngine:
             elif macd_h < macd_h_prev:
                 score += 5
 
-            if score >= 80:
+            if score >= 70:
                 signal = 'SHORT'
 
         # ── RANGING — DESHABILITADO ───────────────────────────────────────────
