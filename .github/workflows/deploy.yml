@@ -58,6 +58,10 @@ jobs:
             # 4. Desplegar the Frontend (solo los archivos estáticos) a Apache
             cd frontend
             
+            # Instalar dependencias y compilar el frontend
+            npm install
+            npm run build
+            
             # Crear y limpiar la carpeta pública de Apache
             sudo mkdir -p /var/www/html/Trade-Crypto
             sudo rm -rf /var/www/html/Trade-Crypto/*
