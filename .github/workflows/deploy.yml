@@ -69,6 +69,6 @@ jobs:
             # Copiar SOLO la carpeta dist a la zona pública
             sudo cp -r dist/* /var/www/html/Trade-Crypto/
             
-            # Asignar permisos correctos para Apache
+            # Asignar permisos correctos para Apache s
             sudo chown -R www-data:www-data /var/www/html/Trade-Crypto/
             sudo chmod -R 755 /var/www/html/Trade-Crypto/
