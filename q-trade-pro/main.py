@@ -23,14 +23,33 @@ from api.server import app, bot_state
 CAPITAL_INICIAL_DIA = 1000.0
 LAST_RESET_DATE = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-# Cooldown por símbolo: tiempo mínimo de espera tras cerrar una posición (5 minutos)
+# ── Lista de símbolos única (unificada y depurada de memecoins/microcaps) ─────
+SYMBOLS_TO_TRADE = [
+    'BTC/USDT:USDT', 'ETH/USDT:USDT', 'SOL/USDT:USDT', 'BNB/USDT:USDT', 'XRP/USDT:USDT',
+    'ADA/USDT:USDT', 'DOGE/USDT:USDT', 'AVAX/USDT:USDT', 'LINK/USDT:USDT',
+    'SUI/USDT:USDT', 'NEAR/USDT:USDT', 'INJ/USDT:USDT', 'TAO/USDT:USDT', 'RENDER/USDT:USDT',
+    'FET/USDT:USDT', 'APT/USDT:USDT', 'SEI/USDT:USDT', 'PONS/USDT:USDT'
+]
+
+# Cooldown por símbolo: tiempo mínimo de espera tras cerrar una posición (45 minutos)
 SYMBOL_COOLDOWN: Dict[str, float] = {}
 
 # Máximo de posiciones simultáneas (gestión de riesgo global)
 MAX_CONCURRENT_POSITIONS = 10  # Total de posiciones abiertas
 MAX_SAME_DIRECTION       = 5   # Máx en la misma dirección (evita sobreexposición correlada)
 
-async def analyze_symbol(symbol: str, exchange: ExchangeClient, pos_manager: PositionManager):
+async def get_btc_regime(exchange: ExchangeClient) -> str:
+    """Obtiene el régimen macro de 1h de Bitcoin como filtro direccional del mercado."""
+    try:
+        raw_btc = await exchange.fetch_ohlcv('BTC/USDT:USDT', timeframes=['1h'])
+        df_1h_btc = MarketDataFetcher.normalize_klines(raw_btc['1h'])
+        df_1h_btc_features = FeatureEngine.compute(df_1h_btc)
+        return RegimeDetector.detect(df_1h_btc_features)
+    except Exception as e:
+        print(f"[BTC Filter] Error obteniendo régimen de BTC: {e}")
+        return 'UNKNOWN'
+
+async def analyze_symbol(symbol: str, exchange: ExchangeClient, pos_manager: PositionManager, btc_regime: str = 'UNKNOWN'):
     try:
         raw_data = await exchange.fetch_ohlcv(symbol, timeframes=['15m', '1h'])
         df_15m = MarketDataFetcher.normalize_klines(raw_data['15m'])
@@ -49,9 +68,18 @@ async def analyze_symbol(symbol: str, exchange: ExchangeClient, pos_manager: Pos
             "signal": setup.get("signal", "NEUTRAL")
         }
 
-        # Ignorar señales neutras
-        if setup.get('signal') == 'NEUTRAL' or score < 70:
+        # Ignorar señales neutras o con score bajo
+        if setup.get('signal') == 'NEUTRAL' or score < 80:
             return
+
+        # ── FILTRO MACRO BITCOIN: Alineación con la tendencia dominante ──────
+        if symbol != 'BTC/USDT:USDT':
+            if setup.get('signal') == 'LONG' and btc_regime == 'BEAR_TREND':
+                print(f"[{symbol}] 🚫 LONG descartado: BTC en BEAR_TREND (Riesgo sistemático de caída).")
+                return
+            elif setup.get('signal') == 'SHORT' and btc_regime == 'BULL_TREND':
+                print(f"[{symbol}] 🚫 SHORT descartado: BTC en BULL_TREND (Contra-tendencia mayor).")
+                return
 
         # No entrar si ya hay posición abierta en este símbolo
         if symbol in pos_manager.active_positions:
@@ -96,14 +124,6 @@ async def analyze_symbol(symbol: str, exchange: ExchangeClient, pos_manager: Pos
 
 async def ticker_loop(exchange: ExchangeClient, pos_manager: PositionManager):
     """Bucle rápido (2s) de monitoreo de precios en vivo y gestión de SL/TP/PnL"""
-    symbols_to_trade = [
-        'BTC/USDT:USDT', 'ETH/USDT:USDT', 'SOL/USDT:USDT', 'BNB/USDT:USDT', 'XRP/USDT:USDT',
-        'ADA/USDT:USDT', 'DOGE/USDT:USDT', 'AVAX/USDT:USDT', 'LINK/USDT:USDT',
-        'SUI/USDT:USDT', 'NEAR/USDT:USDT', 'INJ/USDT:USDT', 'TAO/USDT:USDT', 'RENDER/USDT:USDT',
-        'FET/USDT:USDT', 'APT/USDT:USDT', 'SEI/USDT:USDT', '1000PEPE/USDT:USDT', 'WIF/USDT:USDT',
-        'HYPE/USDT:USDT', 'BLESS/USDT:USDT', 'BANK/USDT:USDT', 'ZEC/USDT:USDT'
-    ]
-    
     global CAPITAL_INICIAL_DIA, LAST_RESET_DATE
     
     while True:
@@ -119,12 +139,14 @@ async def ticker_loop(exchange: ExchangeClient, pos_manager: PositionManager):
                 bot_state["status"] = "Running"
                 bot_state["daily_pnl"] = 0.0
 
-            # 1. Estado del bot
-            bot_state["kill_switch_active"] = False
-            bot_state["status"] = "Running"
+            # 1. Estado del bot: respetar kill switch si está activo
+            if not bot_state.get("kill_switch_active", False):
+                bot_state["status"] = "Running"
+            else:
+                bot_state["status"] = "KillSwitch"
             
             # 2. Obtener Precios en Vivo (BingX)
-            market_prices = await exchange.fetch_tickers(symbols_to_trade)
+            market_prices = await exchange.fetch_tickers(SYMBOLS_TO_TRADE)
             bot_state["live_prices"] = market_prices
             
             # 3. Sincronizar PnL y Nuevas Posiciones desde BingX
@@ -135,9 +157,9 @@ async def ticker_loop(exchange: ExchangeClient, pos_manager: PositionManager):
             for sym in list(pos_manager.active_positions.keys()):
                 if sym not in open_symbols:
                     print(f"[{sym}] 🗑 Posición cerrada por BingX (SL/TP). Removiendo del tracker.")
-                    # Activar cooldown de 5min para no volver a entrar inmediatamente
-                    SYMBOL_COOLDOWN[sym] = time.time() + (5 * 60)
-                    print(f"[{sym}] ⏳ Cooldown de 5min activado tras cierre en BingX.")
+                    # Activar cooldown de 45min para no volver a entrar inmediatamente
+                    SYMBOL_COOLDOWN[sym] = time.time() + (45 * 60)
+                    print(f"[{sym}] ⏳ Cooldown de 45min activado tras cierre en BingX.")
                     del pos_manager.active_positions[sym]
                     
             # Agregar nuevas y actualizar PnL
@@ -149,14 +171,15 @@ async def ticker_loop(exchange: ExchangeClient, pos_manager: PositionManager):
                     entry_price = float(pos.get('entryPrice', 0))
                     side = 'LONG' if pos['side'] == 'long' else 'SHORT'
                     atr_fallback = entry_price * 0.01
-                    sl_dist = atr_fallback * 1.0  # Consistente con risk_manager (1.0x ATR)
+                    sl_dist = atr_fallback * 1.5  # Consistente con risk_manager (1.5x ATR)
+                    tp_dist = atr_fallback * 3.0  # Consistente con risk_manager (3.0x ATR)
                     
                     pos_manager.active_positions[sym] = {
                         'signal': side,
                         'entry_price': entry_price,
                         'size': size,
                         'stop_loss': entry_price - sl_dist if side == 'LONG' else entry_price + sl_dist,
-                        'take_profit': entry_price * 1.015 if side == 'LONG' else entry_price * 0.985,
+                        'take_profit': entry_price + tp_dist if side == 'LONG' else entry_price - tp_dist,
                         'atr': atr_fallback,
                         'breakeven_triggered': False,
                         'partial_taken': False,
@@ -184,35 +207,25 @@ async def ticker_loop(exchange: ExchangeClient, pos_manager: PositionManager):
 
 async def trading_loop(exchange: ExchangeClient, pos_manager: PositionManager):
     """Bucle principal (15s) de análisis OHLCV e inteligencia de mercado"""
-    symbols_to_trade = [
-        'BTC/USDT:USDT', 'ETH/USDT:USDT', 'SOL/USDT:USDT', 'BNB/USDT:USDT', 'XRP/USDT:USDT',
-        'ADA/USDT:USDT', 'DOGE/USDT:USDT', 'AVAX/USDT:USDT', 'LINK/USDT:USDT',
-        'SUI/USDT:USDT', 'NEAR/USDT:USDT', 'INJ/USDT:USDT', 'TAO/USDT:USDT', 'RENDER/USDT:USDT',
-        'FET/USDT:USDT', 'APT/USDT:USDT', 'SEI/USDT:USDT', '1000PEPE/USDT:USDT', 'WIF/USDT:USDT',
-        'HYPE/USDT:USDT', 'BLESS/USDT:USDT', 'BANK/USDT:USDT', 'ZEC/USDT:USDT'
-    ]
-    
     while True:
-        # 1. Análisis Concurrente (Velas OHLCV)
-        tasks = [analyze_symbol(sym, exchange, pos_manager) for sym in symbols_to_trade]
-        await asyncio.gather(*tasks)
+        try:
+            # 0. Obtener Régimen Macro de Bitcoin (Filtro Direccional)
+            btc_regime = await get_btc_regime(exchange)
+
+            # 1. Análisis Concurrente (Velas OHLCV) con filtro macro
+            tasks = [analyze_symbol(sym, exchange, pos_manager, btc_regime) for sym in SYMBOLS_TO_TRADE]
+            await asyncio.gather(*tasks)
+        except Exception as e:
+            print(f"[TradingLoop] Error: {e}")
             
         await asyncio.sleep(15)
 
 async def history_loop(exchange: ExchangeClient):
     """Bucle (30s) para obtener historial de operaciones y calcular PnL Diario"""
-    symbols_to_trade = [
-        'BTC/USDT:USDT', 'ETH/USDT:USDT', 'SOL/USDT:USDT', 'BNB/USDT:USDT', 'XRP/USDT:USDT',
-        'ADA/USDT:USDT', 'DOGE/USDT:USDT', 'AVAX/USDT:USDT', 'LINK/USDT:USDT',
-        'SUI/USDT:USDT', 'NEAR/USDT:USDT', 'INJ/USDT:USDT', 'TAO/USDT:USDT', 'RENDER/USDT:USDT',
-        'FET/USDT:USDT', 'APT/USDT:USDT', 'SEI/USDT:USDT', '1000PEPE/USDT:USDT', 'WIF/USDT:USDT',
-        'HYPE/USDT:USDT', 'BLESS/USDT:USDT', 'BANK/USDT:USDT', 'ZEC/USDT:USDT'
-    ]
-    
     while True:
         try:
             all_trades = []
-            for sym in symbols_to_trade:
+            for sym in SYMBOLS_TO_TRADE:
                 try:
                     # Usamos fetch_closed_orders porque expone el realizedPnl (a diferencia de fetch_my_trades)
                     orders = await exchange.exchange.fetch_closed_orders(sym, limit=20)
@@ -246,9 +259,20 @@ async def history_loop(exchange: ExchangeClient):
             try:
                 current_capital = await exchange.fetch_balance()
                 bot_state["capital"] = current_capital
-                bot_state["daily_pnl"] = current_capital - bot_state["initial_capital"]
-            except:
-                pass
+                daily_pnl = current_capital - bot_state["initial_capital"]
+                bot_state["daily_pnl"] = daily_pnl
+
+                # Circuit Breaker: Máxima pérdida diaria permitida (-4% del capital base)
+                max_daily_loss = -(bot_state["initial_capital"] * 0.04)
+                if daily_pnl <= max_daily_loss and not bot_state["kill_switch_active"]:
+                    bot_state["kill_switch_active"] = True
+                    bot_state["status"] = "KillSwitch (Circuit Breaker)"
+                    print(
+                        f"\n🚨 [CIRCUIT BREAKER] Pérdida diaria excedida ({daily_pnl:+.2f} USDT <= {max_daily_loss:+.2f} USDT). "
+                        f"Kill Switch activado automáticamente hasta el reseteo de las 00:00 UTC."
+                    )
+            except Exception as bal_err:
+                print(f"[HistoryLoop] Error al actualizar balance y PnL: {bal_err}")
                 
         except Exception as e:
             print(f"[HistoryLoop] Error: {e}")

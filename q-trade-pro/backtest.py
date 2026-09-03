@@ -73,9 +73,9 @@ def compute_signals(df15: pd.DataFrame, df1h: pd.DataFrame) -> pd.DataFrame:
         close = row.get('close', 0)
         if adx < 13:
             reg = 'RANGING'
-        elif adx >= 15 and close > ema50 and ema50 > ema200:
+        elif adx >= 25 and close > ema50 and ema50 > ema200:
             reg = 'BULL_TREND'
-        elif adx >= 15 and close < ema50 and ema50 < ema200:
+        elif adx >= 25 and close < ema50 and ema50 < ema200:
             reg = 'BEAR_TREND'
         else:
             reg = 'TRANSITION'

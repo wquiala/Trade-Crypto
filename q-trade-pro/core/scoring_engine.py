@@ -34,6 +34,7 @@ class ScoringEngine:
         atr         = float(last.get('ATRr_14', close * 0.005))
         bb_upper    = float(last.get('BBU_20_2.0',        0))
         bb_lower_b  = float(last.get('BBL_20_2.0',        0))
+        vol_ratio   = float(last.get('VOL_RATIO',       1.0))
 
         score  = 0
         signal = 'NEUTRAL'
@@ -41,12 +42,18 @@ class ScoringEngine:
         # ── BULL_TREND: Solo LONG ─────────────────────────────────────────
         if regime == 'BULL_TREND':
             # ADX obligatorio
-            if adx >= 20:
+            if adx >= 25:
                 score += 20
-            elif adx >= 15:
+            elif adx >= 20:
                 score += 10
             else:
                 return 0, {'signal': 'NEUTRAL', 'regime': regime, 'entry_price': close, 'atr': atr}
+
+            # Filtro de Volumen Institucional
+            if vol_ratio >= 1.2:
+                score += 10
+            elif vol_ratio < 0.8:
+                score -= 25  # Descarta entradas en velas sin volumen real
 
             # Estructura alcista
             if close > ema20 and ema20 > ema50:
@@ -72,17 +79,23 @@ class ScoringEngine:
             elif macd_h > macd_h_prev:
                 score += 5
 
-            if score >= 70:
+            if score >= 80:
                 signal = 'LONG'
 
         # ── BEAR_TREND: Solo SHORT ────────────────────────────────────────
         elif regime == 'BEAR_TREND':
-            if adx >= 20:
+            if adx >= 25:
                 score += 20
-            elif adx >= 15:
+            elif adx >= 20:
                 score += 10
             else:
                 return 0, {'signal': 'NEUTRAL', 'regime': regime, 'entry_price': close, 'atr': atr}
+
+            # Filtro de Volumen Institucional
+            if vol_ratio >= 1.2:
+                score += 10
+            elif vol_ratio < 0.8:
+                score -= 25  # Descarta entradas en velas sin volumen real
 
             # Estructura bajista
             if close < ema20 and ema20 < ema50:
@@ -108,7 +121,7 @@ class ScoringEngine:
             elif macd_h < macd_h_prev:
                 score += 5
 
-            if score >= 70:
+            if score >= 80:
                 signal = 'SHORT'
 
         # ── RANGING — DESHABILITADO ───────────────────────────────────────────

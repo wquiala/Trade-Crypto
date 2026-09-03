@@ -19,7 +19,8 @@ class RegimeDetector:
         if df_higher.empty:
             return 'UNKNOWN'
             
-        last_row = df_higher.iloc[-1]
+        # Usar la última vela CERRADA (iloc[-2]) para no operar con velas incompletas en formación
+        last_row = df_higher.iloc[-2] if len(df_higher) >= 2 else df_higher.iloc[-1]
         
         adx = last_row.get('ADX_14', 0)
         ema50 = last_row.get('EMA_50', 0)
@@ -33,8 +34,8 @@ class RegimeDetector:
         if adx < 13:
             return 'RANGING'
             
-        # 3. Tendencias
-        if adx >= 15:
+        # 3. Tendencias (ADX >= 25 para asegurar fuerza real)
+        if adx >= 25:
             if close > ema50 and ema50 > ema200:
                 return 'BULL_TREND'
             elif close < ema50 and ema50 < ema200:

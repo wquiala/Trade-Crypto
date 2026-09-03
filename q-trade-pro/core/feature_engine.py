@@ -37,6 +37,10 @@ class FeatureEngine:
         # 4. Fuerza de la Tendencia (ADX)
         df['ADX_14'] = ADXIndicator(high=df['high'], low=df['low'], close=df['close'], window=14).adx()
         
+        # 5. Volumen Institucional (Media y Ratio de Participación)
+        df['VOL_SMA_20'] = df['volume'].rolling(window=20).mean()
+        df['VOL_RATIO'] = df['volume'] / df['VOL_SMA_20'].replace(0, 1e-9)
+        
         # Eliminar filas con NaN (las primeras debido al lookback de los indicadores)
         df.dropna(inplace=True)
         

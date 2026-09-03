@@ -57,3 +57,10 @@ async def reset_kill_switch():
     bot_state["status"] = "Running"
     bot_state["initial_capital"] = bot_state["capital"]
     return {"success": True, "message": "Kill Switch reseteado. Bot reactivado."}
+
+@app.post("/api/trigger-kill-switch")
+async def trigger_kill_switch():
+    """Permite pausar/detener el bot activando el Kill Switch manualmente."""
+    bot_state["kill_switch_active"] = True
+    bot_state["status"] = "KillSwitch (Manual)"
+    return {"success": True, "message": "Kill Switch activado manualmente. Operativa congelada."}
