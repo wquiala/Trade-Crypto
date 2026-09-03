@@ -107,7 +107,7 @@ function App() {
                     </div>
                   </div>
                   <div className="flex flex-col items-end">
-                    <span className={`text-2xl font-black font-mono ${data.score >= 70 ? 'text-neonGreen' : 'text-white'}`}>
+                    <span className={`text-2xl font-black font-mono ${data.score >= 80 ? 'text-neonGreen' : 'text-white'}`}>
                       {data.score}
                     </span>
                     <span className="text-xs text-textMuted">Score</span>

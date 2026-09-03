@@ -35,6 +35,12 @@ jobs:
             # (Opcional) Arreglar permisos de git por si acaso
             git config --global --add safe.directory /home/ubuntu/Trade-Crypto
             
+            # --- LIMPIEZA PREVENTIVA DE DISCO ---
+            pm2 flush 2>/dev/null || true
+            sudo journalctl --vacuum-size=50M 2>/dev/null || true
+            sudo apt-get clean 2>/dev/null || true
+            rm -rf ~/.cache/pip
+
             # 2. Bajar cambios de Github
             git fetch --all
             git reset --hard origin/main
@@ -52,25 +58,13 @@ jobs:
             source venv/bin/activate
             pip install -r requirements.txt
             
-            # Reiniciar o arrancar el bot de Python usando PM2
-            pm2 kill || true # Matar el demonio PM2 completamente para eliminar cualquier corrupción
-            pm2 start main.py --interpreter ./venv/bin/python --name "bot-trading"
+            # Reiniciar el bot en PM2
+            pm2 restart bot-trading || pm2 start main.py --interpreter ./venv/bin/python --name "bot-trading"
             pm2 save
             
-            # 4. Desplegar the Frontend (solo los archivos estáticos) a Apache
-            cd frontend
-            
-            # Instalar dependencias y compilar el frontend
-            npm install
-            npm run build
-            
-            # Crear y limpiar la carpeta pública de Apache
+            # 4. Desplegar Frontend pre-compilado a Apache
             sudo mkdir -p /var/www/html/Trade-Crypto
             sudo rm -rf /var/www/html/Trade-Crypto/*
-            
-            # Copiar SOLO la carpeta dist a la zona pública
-            sudo cp -r dist/* /var/www/html/Trade-Crypto/
-            
-            # Asignar permisos correctos para Apache s
+            sudo cp -r frontend/dist/* /var/www/html/Trade-Crypto/
             sudo chown -R www-data:www-data /var/www/html/Trade-Crypto/
             sudo chmod -R 755 /var/www/html/Trade-Crypto/
