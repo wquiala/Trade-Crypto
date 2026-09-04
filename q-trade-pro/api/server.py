@@ -13,9 +13,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Referencias globales que el main.py actualizará
 bot_state = {
-    "capital": 1000.0,
+    "capital": 0.0,
+    "initial_capital": 0.0,
     "kill_switch_active": False,
     "status": "Running",
     "uptime": "0h 0m",
@@ -56,6 +56,7 @@ async def reset_kill_switch():
     bot_state["kill_switch_active"] = False
     bot_state["status"] = "Running"
     bot_state["initial_capital"] = bot_state["capital"]
+    bot_state["daily_pnl"] = 0.0
     return {"success": True, "message": "Kill Switch reseteado. Bot reactivado."}
 
 @app.post("/api/trigger-kill-switch")

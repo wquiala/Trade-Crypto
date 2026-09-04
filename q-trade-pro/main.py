@@ -19,8 +19,8 @@ from execution.position_manager import PositionManager
 # Importamos el backend de la API
 from api.server import app, bot_state
 
-# Capital base si no hay API Keys, pero será sobreescrito por el fetch_balance()
-CAPITAL_INICIAL_DIA = 1000.0
+# Capital base: será sobreescrito por el fetch_balance() real de BingX
+CAPITAL_INICIAL_DIA = 0.0
 LAST_RESET_DATE = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 # ── Lista de símbolos única (unificada y depurada de memecoins/microcaps) ─────
@@ -258,19 +258,12 @@ async def history_loop(exchange: ExchangeClient):
             # Calcular PnL Diario usando la equidad
             try:
                 current_capital = await exchange.fetch_balance()
-                bot_state["capital"] = current_capital
-                daily_pnl = current_capital - bot_state["initial_capital"]
-                bot_state["daily_pnl"] = daily_pnl
-
-                # Circuit Breaker: Máxima pérdida diaria permitida (-4% del capital base)
-                max_daily_loss = -(bot_state["initial_capital"] * 0.04)
-                if daily_pnl <= max_daily_loss and not bot_state["kill_switch_active"]:
-                    bot_state["kill_switch_active"] = True
-                    bot_state["status"] = "KillSwitch (Circuit Breaker)"
-                    print(
-                        f"\n🚨 [CIRCUIT BREAKER] Pérdida diaria excedida ({daily_pnl:+.2f} USDT <= {max_daily_loss:+.2f} USDT). "
-                        f"Kill Switch activado automáticamente hasta el reseteo de las 00:00 UTC."
-                    )
+                if current_capital > 0:
+                    bot_state["capital"] = current_capital
+                    if bot_state.get("initial_capital", 0.0) <= 0:
+                        bot_state["initial_capital"] = current_capital
+                    daily_pnl = current_capital - bot_state["initial_capital"]
+                    bot_state["daily_pnl"] = daily_pnl
             except Exception as bal_err:
                 print(f"[HistoryLoop] Error al actualizar balance y PnL: {bal_err}")
                 
@@ -291,6 +284,7 @@ async def main():
     CAPITAL_INICIAL_DIA = await exchange.fetch_balance()
     bot_state["capital"] = CAPITAL_INICIAL_DIA
     bot_state["initial_capital"] = CAPITAL_INICIAL_DIA
+    bot_state["kill_switch_active"] = False
     print(f"✅ Capital sincronizado: ${CAPITAL_INICIAL_DIA:.2f} USDT")
     
     # Sincronizar posiciones huérfanas

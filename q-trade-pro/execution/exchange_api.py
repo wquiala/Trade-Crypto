@@ -22,23 +22,29 @@ class ExchangeClient:
             self.exchange.set_sandbox_mode(True)
             
     async def fetch_balance(self) -> float:
-        """Obtiene el balance libre actual en USDT de la cuenta."""
+        """Obtiene el balance total (equity) actual en USDT de la cuenta."""
         try:
-            # Si no hay llaves API, devolveremos el monto estático de 1000
             if not self.exchange.apiKey or not self.exchange.secret:
-                return 1000.0
+                return 73.0
             
-            # Buscamos el saldo en la cuenta de futuros (swap) en BingX
             balance = await self.exchange.fetch_balance({'type': 'swap'})
             
-            usdt_balance = float(balance.get('USDT', {}).get('free', 0.0))
-            vst_balance = float(balance.get('VST', {}).get('free', 0.0))
+            # Priorizar 'total' (equidad total: balance + margen en posiciones + unrealized PnL)
+            usdt_total = float(balance.get('total', {}).get('USDT', 0.0))
+            if usdt_total <= 0:
+                usdt_total = float(balance.get('USDT', {}).get('total', 0.0))
+            if usdt_total <= 0:
+                usdt_total = float(balance.get('USDT', {}).get('free', 0.0))
+
+            vst_total = float(balance.get('total', {}).get('VST', 0.0))
+            if vst_total <= 0:
+                vst_total = float(balance.get('VST', {}).get('total', 0.0))
             
-            # En modo Testnet/Sandbox, BingX a veces usa 'VST' en lugar de 'USDT'
-            return max(usdt_balance, vst_balance)
+            capital = max(usdt_total, vst_total)
+            return capital if capital > 0 else 73.0
         except Exception as e:
-            print(f"[Exchange] Error fetch_balance: {e}. Usando capital fallback ($1000).")
-            return 1000.0
+            print(f"[Exchange] Error fetch_balance: {e}")
+            return 0.0
             
     async def fetch_ohlcv(self, symbol: str, timeframes: List[str]) -> Dict[str, List]:
         """
@@ -136,45 +142,33 @@ class ExchangeClient:
                 f"SL: {formatted_sl:.4f} | TP: {formatted_tp:.4f}"
             )
 
-            # 3. Anclar Stop Loss
-            sl_placed = False
+            # 3. Anclar Stop Loss (intento de trigger order condicional en BingX)
             try:
-                sl_order = await self.exchange.create_order(
+                sl_order = await self.exchange.create_trigger_order(
                     symbol,
-                    type='STOP_MARKET',
+                    type='market',
                     side=close_side,
                     amount=formatted_size,
-                    params={'stopPrice': formatted_sl, 'positionSide': position_side}
+                    triggerPrice=formatted_sl,
+                    params={'positionSide': position_side, 'reduceOnly': True}
                 )
-                print(f"[Exchange] 🛡 SL anclado @ {formatted_sl:.4f}: {sl_order['id']}")
-                sl_placed = True
+                print(f"[Exchange] 🛡 SL trigger anclado en exchange @ {formatted_sl:.4f}: {sl_order.get('id')}")
             except Exception as e:
-                print(f"[Exchange] ⚠️ Error anclando SL: {e}")
+                print(f"[Exchange] ℹ️ SL en exchange omitido ({e}). PositionManager protegerá SL @ {formatted_sl:.4f} por software.")
 
-            # 4. Anclar Take Profit (solo si SL está asegurado)
-            if sl_placed:
-                try:
-                    tp_order = await self.exchange.create_order(
-                        symbol,
-                        type='TAKE_PROFIT_MARKET',
-                        side=close_side,
-                        amount=formatted_size,
-                        params={'stopPrice': formatted_tp, 'positionSide': position_side}
-                    )
-                    print(f"[Exchange] 🎯 TP anclado @ {formatted_tp:.4f}: {tp_order['id']}")
-                except Exception as e:
-                    print(f"[Exchange] ⚠️ Error anclando TP: {e}")
-            else:
-                # Sin SL = sin protección → cerrar posición de emergencia
-                print(f"[Exchange] 🔴 SL no anclado. Cerrando posición de emergencia.")
-                try:
-                    await self.exchange.create_order(
-                        symbol, type='market', side=close_side, amount=formatted_size,
-                        params={'reduceOnly': True, 'positionSide': position_side}
-                    )
-                except Exception as close_err:
-                    print(f"[Exchange] ❌ Error cierre emergencia: {close_err}")
-                return None
+            # 4. Anclar Take Profit (intento de trigger order condicional en BingX)
+            try:
+                tp_order = await self.exchange.create_trigger_order(
+                    symbol,
+                    type='market',
+                    side=close_side,
+                    amount=formatted_size,
+                    triggerPrice=formatted_tp,
+                    params={'positionSide': position_side, 'reduceOnly': True}
+                )
+                print(f"[Exchange] 🎯 TP trigger anclado en exchange @ {formatted_tp:.4f}: {tp_order.get('id')}")
+            except Exception as e:
+                print(f"[Exchange] ℹ️ TP en exchange omitido ({e}). PositionManager gestionará TP @ {formatted_tp:.4f} por software.")
 
             return order
 

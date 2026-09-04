@@ -33,6 +33,16 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
+  const handleResetKillSwitch = async () => {
+    try {
+      await axios.post(`${API_BASE}/reset-kill-switch`);
+      const statusRes = await axios.get(`${API_BASE}/status`);
+      setStatus(statusRes.data);
+    } catch (error) {
+      console.error("Error resetting kill switch", error);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background text-white p-6 flex flex-col gap-6">
       
@@ -56,9 +66,18 @@ function App() {
 
         <div className="flex gap-4">
           {status?.kill_switch_active && (
-            <div className="flex items-center gap-2 px-4 py-2 bg-neonRed/20 border border-neonRed rounded-xl text-neonRed font-semibold animate-pulse">
-              <ShieldAlert className="w-5 h-5" />
-              KILL SWITCH ACTIVE
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 px-4 py-2 bg-neonRed/20 border border-neonRed rounded-xl text-neonRed font-semibold animate-pulse">
+                <ShieldAlert className="w-5 h-5" />
+                KILL SWITCH ACTIVE
+              </div>
+              <button
+                onClick={handleResetKillSwitch}
+                className="px-4 py-2 bg-neonGreen/20 hover:bg-neonGreen/30 border border-neonGreen text-neonGreen font-semibold rounded-xl text-sm transition-all cursor-pointer active:scale-95 shadow-md"
+                title="Reactivar operativa y resetear Kill Switch"
+              >
+                Reactivar Bot
+              </button>
             </div>
           )}
           <div className="flex flex-col items-end px-6 py-2 bg-black/40 rounded-xl border border-white/5">
