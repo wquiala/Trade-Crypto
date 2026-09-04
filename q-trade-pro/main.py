@@ -28,7 +28,7 @@ SYMBOLS_TO_TRADE = [
     'BTC/USDT:USDT', 'ETH/USDT:USDT', 'SOL/USDT:USDT', 'BNB/USDT:USDT', 'XRP/USDT:USDT',
     'ADA/USDT:USDT', 'DOGE/USDT:USDT', 'AVAX/USDT:USDT', 'LINK/USDT:USDT',
     'SUI/USDT:USDT', 'NEAR/USDT:USDT', 'INJ/USDT:USDT', 'TAO/USDT:USDT', 'RENDER/USDT:USDT',
-    'FET/USDT:USDT', 'APT/USDT:USDT', 'SEI/USDT:USDT', 'PONS/USDT:USDT'
+    'FET/USDT:USDT', 'APT/USDT:USDT', 'SEI/USDT:USDT', 'PAXG/USDT:USDT', 'ZEC/USDT:USDT'
 ]
 
 # Cooldown por símbolo: tiempo mínimo de espera tras cerrar una posición (45 minutos)
@@ -69,7 +69,7 @@ async def analyze_symbol(symbol: str, exchange: ExchangeClient, pos_manager: Pos
         }
 
         # Ignorar señales neutras o con score bajo
-        if setup.get('signal') == 'NEUTRAL' or score < 80:
+        if setup.get('signal') == 'NEUTRAL' or score < 70:
             return
 
         # ── FILTRO MACRO BITCOIN: Alineación con la tendencia dominante ──────

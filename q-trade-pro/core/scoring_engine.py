@@ -6,8 +6,8 @@ class ScoringEngine:
     Motor de señales profesional. Requiere MÚLTIPLES confirmaciones antes de dar entrada.
 
     Puntuación:
-    - 0-79:  NO OPERAR
-    - 80+:   ENTRADA (todas las condiciones alineadas)
+    - 0-69:  NO OPERAR
+    - 70+:   ENTRADA (condiciones alineadas)
 
     Filosofía: es mejor perderse una operación que entrar en una mala.
     """
@@ -79,7 +79,7 @@ class ScoringEngine:
             elif macd_h > macd_h_prev:
                 score += 5
 
-            if score >= 80:
+            if score >= 70:
                 signal = 'LONG'
 
         # ── BEAR_TREND: Solo SHORT ────────────────────────────────────────
@@ -121,7 +121,7 @@ class ScoringEngine:
             elif macd_h < macd_h_prev:
                 score += 5
 
-            if score >= 80:
+            if score >= 70:
                 signal = 'SHORT'
 
         # ── RANGING — DESHABILITADO ───────────────────────────────────────────
