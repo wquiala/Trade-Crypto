@@ -108,67 +108,79 @@ class ExchangeClient:
                 print(f"[Exchange] ⚠️ Tamaño {size} menor al mínimo permitido para {symbol}. Cancelando orden.")
                 return None
 
-            print(f"[Exchange] 🚀 {order_side.upper()} {formatted_size} {symbol} ({position_side})")
+            formatted_sl = float(self.exchange.price_to_precision(symbol, setup['stop_loss']))
+            formatted_tp = float(self.exchange.price_to_precision(symbol, setup['take_profit']))
 
-            # 1. Orden de mercado de entrada
-            order = await self.exchange.create_order(
-                symbol,
-                type='market',
-                side=order_side,
-                amount=formatted_size,
-                params={'positionSide': position_side}
-            )
-            print(f"[Exchange] 🟢 Posición abierta: {order['id']}")
+            print(f"[Exchange] 🚀 {order_side.upper()} {formatted_size} {symbol} ({position_side}) | SL: {formatted_sl} | TP: {formatted_tp}")
 
-            # 2. Precio de fill real (ajuste sobre el estimado del scoring)
+            # 1. Enviar orden con Stop Loss y Take Profit nativos adjuntos en BingX
+            order_params = {
+                'positionSide': position_side,
+                'stopLoss': {
+                    'type': 'STOP_MARKET',
+                    'stopPrice': formatted_sl,
+                    'workingType': 'MARK_PRICE'
+                },
+                'takeProfit': {
+                    'type': 'TAKE_PROFIT_MARKET',
+                    'stopPrice': formatted_tp,
+                    'workingType': 'MARK_PRICE'
+                }
+            }
+
+            order = None
+            try:
+                order = await self.exchange.create_order(
+                    symbol,
+                    type='market',
+                    side=order_side,
+                    amount=formatted_size,
+                    params=order_params
+                )
+                print(f"[Exchange] 🟢 Posición abierta con SL ({formatted_sl}) y TP ({formatted_tp}) nativos en BingX: {order.get('id')}")
+            except Exception as attached_err:
+                print(f"[Exchange] ℹ️ SL/TP adjunto no aceptado ({attached_err}). Abriendo a mercado y anclando SL/TP condicionales...")
+                order = await self.exchange.create_order(
+                    symbol,
+                    type='market',
+                    side=order_side,
+                    amount=formatted_size,
+                    params={'positionSide': position_side}
+                )
+                print(f"[Exchange] 🟢 Posición abierta: {order.get('id')}")
+
+                # Anclar SL en BingX
+                try:
+                    sl_res = await self.exchange.create_order(
+                        symbol,
+                        type='market',
+                        side=close_side,
+                        amount=formatted_size,
+                        params={'stopLossPrice': formatted_sl, 'positionSide': position_side, 'reduceOnly': True}
+                    )
+                    print(f"[Exchange] 🛡 SL anclado en BingX @ {formatted_sl}: {sl_res.get('id')}")
+                except Exception as sl_err:
+                    print(f"[Exchange] ⚠️ SL en BingX omitido ({sl_err}). PositionManager protegerá SL por software.")
+
+                # Anclar TP en BingX
+                try:
+                    tp_res = await self.exchange.create_order(
+                        symbol,
+                        type='market',
+                        side=close_side,
+                        amount=formatted_size,
+                        params={'takeProfitPrice': formatted_tp, 'positionSide': position_side, 'reduceOnly': True}
+                    )
+                    print(f"[Exchange] 🎯 TP anclado en BingX @ {formatted_tp}: {tp_res.get('id')}")
+                except Exception as tp_err:
+                    print(f"[Exchange] ⚠️ TP en BingX omitido ({tp_err}). PositionManager gestionará TP por software.")
+
+            # 2. Registrar fill real y precios para el tracker
             estimated_entry = setup['entry_price']
             real_fill       = order.get('average') or order.get('price') or estimated_entry
-            price_offset    = real_fill - estimated_entry
-
-            real_sl = setup['stop_loss']   + price_offset
-            real_tp = setup['take_profit'] + price_offset
-
-            # Ajustar precios a la precisión del par en BingX
-            formatted_sl = float(self.exchange.price_to_precision(symbol, real_sl))
-            formatted_tp = float(self.exchange.price_to_precision(symbol, real_tp))
-
-            # Actualizar setup con precios reales para el tracker
             setup['entry_price'] = real_fill
             setup['stop_loss']   = formatted_sl
             setup['take_profit'] = formatted_tp
-
-            print(
-                f"[Exchange] 📍 Fill: {real_fill:.4f} | "
-                f"SL: {formatted_sl:.4f} | TP: {formatted_tp:.4f}"
-            )
-
-            # 3. Anclar Stop Loss (intento de trigger order condicional en BingX)
-            try:
-                sl_order = await self.exchange.create_trigger_order(
-                    symbol,
-                    type='market',
-                    side=close_side,
-                    amount=formatted_size,
-                    triggerPrice=formatted_sl,
-                    params={'positionSide': position_side, 'reduceOnly': True}
-                )
-                print(f"[Exchange] 🛡 SL trigger anclado en exchange @ {formatted_sl:.4f}: {sl_order.get('id')}")
-            except Exception as e:
-                print(f"[Exchange] ℹ️ SL en exchange omitido ({e}). PositionManager protegerá SL @ {formatted_sl:.4f} por software.")
-
-            # 4. Anclar Take Profit (intento de trigger order condicional en BingX)
-            try:
-                tp_order = await self.exchange.create_trigger_order(
-                    symbol,
-                    type='market',
-                    side=close_side,
-                    amount=formatted_size,
-                    triggerPrice=formatted_tp,
-                    params={'positionSide': position_side, 'reduceOnly': True}
-                )
-                print(f"[Exchange] 🎯 TP trigger anclado en exchange @ {formatted_tp:.4f}: {tp_order.get('id')}")
-            except Exception as e:
-                print(f"[Exchange] ℹ️ TP en exchange omitido ({e}). PositionManager gestionará TP @ {formatted_tp:.4f} por software.")
 
             return order
 
@@ -220,15 +232,19 @@ class ExchangeClient:
             except Exception as cancel_err:
                 print(f"[Exchange] Nota al cancelar SL previo en {symbol}: {cancel_err}")
 
-            # 2. Anclar la nueva orden STOP_MARKET
+            # 2. Anclar la nueva orden de Stop Loss usando stopLossPrice (parámetro de BingX)
             sl_order = await self.exchange.create_order(
                 symbol,
-                type='STOP_MARKET',
+                type='market',
                 side=close_side,
                 amount=formatted_size,
-                params={'stopPrice': formatted_sl, 'positionSide': position_side}
+                params={
+                    'stopLossPrice': formatted_sl,
+                    'positionSide': position_side,
+                    'reduceOnly': True
+                }
             )
-            print(f"[Exchange] 🛡 SL actualizado @ {formatted_sl:.4f} para {symbol}: {sl_order['id']}")
+            print(f"[Exchange] 🛡 SL actualizado en BingX @ {formatted_sl:.4f} para {symbol}: {sl_order.get('id')}")
             return True
         except Exception as e:
             print(f"[Exchange] Error actualizando Stop Loss para {symbol}: {e}")
